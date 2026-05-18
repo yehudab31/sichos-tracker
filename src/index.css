@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-parchment: #f7f3ed;
+    --color-cream: #faf8f4;
+    --color-gold: #b8882a;
+    --color-gold-light: #d4a843;
+    --color-ink: #1c1610;
+    --color-ink-muted: #4a3f30;
+    --color-border: #ddd4c0;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+  }
+
+  body {
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .font-serif {
+    font-family: 'Crimson Pro', Georgia, serif;
+  }
+
+  .text-gold {
+    color: var(--color-gold);
+  }
+
+  .bg-parchment {
+    background-color: var(--color-parchment);
+  }
+
+  .bg-cream {
+    background-color: var(--color-cream);
+  }
+
+  .border-parchment {
+    border-color: var(--color-border);
+  }
+
+  .text-ink {
+    color: var(--color-ink);
+  }
+
+  .text-ink-muted {
+    color: var(--color-ink-muted);
+  }
+}
