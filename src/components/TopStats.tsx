@@ -1,4 +1,4 @@
-import { BookMarked, FileText, BarChart3 } from 'lucide-react';
+import { BookMarked, FileText, BarChart3, BookOpen } from 'lucide-react';
 import type { Volume } from '../data/sampleData';
 import type { LearnedMap } from '../hooks/useLearnedState';
 
@@ -7,17 +7,36 @@ interface Props {
   learned: LearnedMap;
 }
 
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  sub: string;
-  accent?: boolean;
+const SEFER_KEYWORDS: [string, string][] = [
+  ['בראשית', 'בראשית'], ['נח', 'בראשית'], ['לך לך', 'בראשית'], ['וירא', 'בראשית'],
+  ['חיי שרה', 'בראשית'], ['תולדות', 'בראשית'], ['ויצא', 'בראשית'], ['וישלח', 'בראשית'],
+  ['וישב', 'בראשית'], ['מקץ', 'בראשית'], ['ויגש', 'בראשית'], ['ויחי', 'בראשית'],
+  ['שמות', 'שמות'], ['וארא', 'שמות'], ['בא', 'שמות'], ['בשלח', 'שמות'],
+  ['יתרו', 'שמות'], ['משפטים', 'שמות'], ['תרומה', 'שמות'], ['תצוה', 'שמות'],
+  ['תשא', 'שמות'], ['ויקהל', 'שמות'], ['פקודי', 'שמות'],
+  ['ויקרא', 'ויקרא'], ['צו', 'ויקרא'], ['שמיני', 'ויקרא'], ['תזריע', 'ויקרא'],
+  ['מצורע', 'ויקרא'], ['אחרי', 'ויקרא'], ['קדושים', 'ויקרא'], ['אמור', 'ויקרא'],
+  ['בהר', 'ויקרא'], ['בחוקותי', 'ויקרא'],
+  ['במדבר', 'במדבר'], ['נשא', 'במדבר'], ['בהעלותך', 'במדבר'], ['שלח', 'במדבר'],
+  ['קרח', 'במדבר'], ['חוקת', 'במדבר'], ['בלק', 'במדבר'], ['פנחס', 'במדבר'],
+  ['מטות', 'במדבר'], ['מסעי', 'במדבר'], ['מטו"מ', 'במדבר'],
+  ['דברים', 'דברים'], ['ואתחנן', 'דברים'], ['עקב', 'דברים'], ['ראה', 'דברים'],
+  ['שופטים', 'דברים'], ['תצא', 'דברים'], ['תבא', 'דברים'], ['נצבים', 'דברים'],
+  ['וילך', 'דברים'], ['האזינו', 'דברים'],
+];
+
+function getSeferForTitle(title: string): string {
+  for (const [kw, sefer] of SEFER_KEYWORDS) {
+    if (title.includes(kw)) return sefer;
+  }
+  return 'מועדים';
 }
 
-function StatCard({ icon, label, value, sub, accent }: StatCardProps) {
+function StatCard({ icon, label, value, sub, accent }: {
+  icon: React.ReactNode; label: string; value: string | number; sub: string; accent?: boolean;
+}) {
   return (
-    <div className={`bg-white rounded-xl border border-[#ddd4c0] p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow duration-200 ${accent ? 'border-[#0B1F3A]/20' : ''}`}>
+    <div className={`bg-white rounded-xl border p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow ${accent ? 'border-[#0B1F3A]/30' : 'border-[#ddd4c0]'}`}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[#4a3f30] uppercase tracking-widest">{label}</span>
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${accent ? 'bg-[#0B1F3A]' : 'bg-[#f7f3ed]'}`}>
@@ -33,54 +52,59 @@ function StatCard({ icon, label, value, sub, accent }: StatCardProps) {
 }
 
 export default function TopStats({ volumes, learned }: Props) {
-  const allSichos = volumes.flatMap((v) => v.sichos);
-  const totalSichos = allSichos.length;
-  const totalPages = allSichos.reduce((sum, s) => sum + s.pageCount, 0);
+  const allSichos    = volumes.flatMap((v) => v.sichos);
+  const totalSichos  = allSichos.length;
+  const totalPages   = allSichos.reduce((sum, s) => sum + s.pageCount, 0);
+  const learnedList  = allSichos.filter((s) => learned[s.id]);
+  const learnedSichos = learnedList.length;
+  const learnedPages  = learnedList.reduce((sum, s) => sum + s.pageCount, 0);
+  const overallPct    = totalPages === 0 ? 0 : Math.round((learnedPages / totalPages) * 100);
+  const completedVols = volumes.filter((v) => v.sichos.length > 0 && v.sichos.every((s) => learned[s.id])).length;
 
-  const learnedSichos = allSichos.filter((s) => learned[s.id]).length;
-  const learnedPages = allSichos.filter((s) => learned[s.id]).reduce((sum, s) => sum + s.pageCount, 0);
-  const overallPct = totalPages === 0 ? 0 : Math.round((learnedPages / totalPages) * 100);
+  const SFARIM = ['בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים', 'מועדים'];
+  const seferStats = SFARIM.map((sefer) => {
+    const sichos = allSichos.filter((s) => getSeferForTitle(s.title) === sefer);
+    return { name: sefer, total: sichos.length, learned: sichos.filter((s) => learned[s.id]).length };
+  }).filter((s) => s.total > 0);
 
   return (
-    <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-[#1c1610] tracking-tight">Your Progress</h2>
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-4">
+      <h2 className="text-lg font-semibold text-[#1c1610] tracking-tight mb-6">Your Progress</h2>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+        <StatCard icon={<BookMarked size={16} />} label="Sichos" value={learnedSichos} sub={`of ${totalSichos}`} />
+        <StatCard icon={<FileText size={16} />} label="Pages" value={learnedPages.toLocaleString()} sub={`of ${totalPages.toLocaleString()}`} />
+        <StatCard icon={<BookOpen size={16} />} label="Volumes" value={completedVols} sub="of 39 complete" />
+        <StatCard icon={<BarChart3 size={16} />} label="Overall" value={`${overallPct}%`} sub="by page weight" accent />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          icon={<BookMarked size={16} />}
-          label="Sichos Learnt"
-          value={learnedSichos}
-          sub={`out of ${totalSichos} sichos`}
-        />
-        <StatCard
-          icon={<FileText size={16} />}
-          label="Pages Learnt"
-          value={learnedPages}
-          sub={`out of ${totalPages} pages`}
-        />
-        <StatCard
-          icon={<BarChart3 size={16} />}
-          label="Overall Progress"
-          value={`${overallPct}%`}
-          sub="weighted by page count"
-          accent
-        />
-      </div>
-
-      {/* Overall progress bar */}
       {overallPct > 0 && (
-        <div className="mt-4 flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-5">
           <div className="flex-1 h-1.5 rounded-full bg-[#ddd4c0] overflow-hidden">
-            <div
-              className="h-1.5 rounded-full bg-[#0B1F3A] transition-all duration-500"
-              style={{ width: `${overallPct}%` }}
-            />
+            <div className="h-1.5 rounded-full bg-[#0B1F3A] transition-all duration-500" style={{ width: `${overallPct}%` }} />
           </div>
-          <span className="text-xs text-[#4a3f30] font-medium">{learnedPages} / {totalPages} pp</span>
+          <span className="text-xs text-[#4a3f30] font-medium whitespace-nowrap">{learnedPages.toLocaleString()} / {totalPages.toLocaleString()} pp</span>
         </div>
       )}
+
+      <div className="bg-white rounded-xl border border-[#ddd4c0] shadow-sm p-5">
+        <p className="text-xs font-medium text-[#4a3f30] uppercase tracking-widest mb-4">Progress by Sefer</p>
+        <div className="flex flex-col gap-3">
+          {seferStats.map(({ name, learned: l, total: t }) => {
+            const pct = t === 0 ? 0 : Math.round((l / t) * 100);
+            return (
+              <div key={name} className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-[#1c1610] font-serif w-14 text-right shrink-0" dir="rtl">{name}</span>
+                <div className="flex-1 h-2 rounded-full bg-[#ede8df] overflow-hidden">
+                  <div className="h-2 rounded-full bg-[#0B1F3A] transition-all duration-700" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-xs text-[#4a3f30] w-9 text-right shrink-0">{pct}%</span>
+                <span className="text-xs text-[#4a3f30]/40 w-14 shrink-0">{l}/{t}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }

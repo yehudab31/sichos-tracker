@@ -6,24 +6,39 @@ import Footer from './components/Footer';
 import WelcomeScreen from './components/WelcomeScreen';
 import ImportPrompt from './components/ImportPrompt';
 import AdminStats from './components/AdminStats';
+import ShareView from './components/ShareView';
 import { useLearnedState, hasLocalProgress, importLocalProgressToSupabase } from './hooks/useLearnedState';
 import { useAuth } from './hooks/useAuth';
 import { SAMPLE_VOLUMES } from './data/sampleData';
 import { Loader2 } from 'lucide-react';
 
+// Detect ?share=USER_ID in the URL
+function getShareUserId(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('share');
+}
+
 function App() {
+  const shareUserId = getShareUserId();
+
+  // If this is a share link, render the read-only view immediately
+  if (shareUserId) {
+    return <ShareView userId={shareUserId} />;
+  }
+
+  return <MainApp />;
+}
+
+function MainApp() {
   const { user, loading: authLoading } = useAuth();
   const [learned, toggle, progressLoading] = useLearnedState(user);
-  const [showImport, setShowImport] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [showImport, setShowImport]    = useState(false);
+  const [importing, setImporting]      = useState(false);
   const [importChecked, setImportChecked] = useState(false);
 
-  // When user logs in, check if there's local progress to import
   useEffect(() => {
     if (user && !importChecked) {
-      if (hasLocalProgress()) {
-        setShowImport(true);
-      }
+      if (hasLocalProgress()) setShowImport(true);
       setImportChecked(true);
     }
     if (!user) {
@@ -38,12 +53,7 @@ function App() {
     await importLocalProgressToSupabase(user);
     setShowImport(false);
     setImporting(false);
-    // Reload page to re-fetch from Supabase
     window.location.reload();
-  };
-
-  const handleDismissImport = () => {
-    setShowImport(false);
   };
 
   if (authLoading) {
@@ -63,7 +73,7 @@ function App() {
             {showImport && (
               <ImportPrompt
                 onImport={handleImport}
-                onDismiss={handleDismissImport}
+                onDismiss={() => setShowImport(false)}
                 loading={importing}
               />
             )}
