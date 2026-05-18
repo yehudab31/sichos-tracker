@@ -7,29 +7,52 @@ interface Props {
   learned: LearnedMap;
 }
 
-const SEFER_KEYWORDS: [string, string][] = [
-  ['בראשית', 'בראשית'], ['נח', 'בראשית'], ['לך לך', 'בראשית'], ['וירא', 'בראשית'],
-  ['חיי שרה', 'בראשית'], ['תולדות', 'בראשית'], ['ויצא', 'בראשית'], ['וישלח', 'בראשית'],
-  ['וישב', 'בראשית'], ['מקץ', 'בראשית'], ['ויגש', 'בראשית'], ['ויחי', 'בראשית'],
-  ['שמות', 'שמות'], ['וארא', 'שמות'], ['בא', 'שמות'], ['בשלח', 'שמות'],
-  ['יתרו', 'שמות'], ['משפטים', 'שמות'], ['תרומה', 'שמות'], ['תצוה', 'שמות'],
-  ['תשא', 'שמות'], ['ויקהל', 'שמות'], ['פקודי', 'שמות'],
-  ['ויקרא', 'ויקרא'], ['צו', 'ויקרא'], ['שמיני', 'ויקרא'], ['תזריע', 'ויקרא'],
-  ['מצורע', 'ויקרא'], ['אחרי', 'ויקרא'], ['קדושים', 'ויקרא'], ['אמור', 'ויקרא'],
-  ['בהר', 'ויקרא'], ['בחוקותי', 'ויקרא'],
-  ['במדבר', 'במדבר'], ['נשא', 'במדבר'], ['בהעלותך', 'במדבר'], ['שלח', 'במדבר'],
-  ['קרח', 'במדבר'], ['חוקת', 'במדבר'], ['בלק', 'במדבר'], ['פנחס', 'במדבר'],
-  ['מטות', 'במדבר'], ['מסעי', 'במדבר'], ['מטו"מ', 'במדבר'],
-  ['דברים', 'דברים'], ['ואתחנן', 'דברים'], ['עקב', 'דברים'], ['ראה', 'דברים'],
-  ['שופטים', 'דברים'], ['תצא', 'דברים'], ['תבא', 'דברים'], ['נצבים', 'דברים'],
-  ['וילך', 'דברים'], ['האזינו', 'דברים'],
-];
+// Exact parsha → sefer mapping.
+// We strip the ordinal suffix (א, ב, ג…) before lookup so "בראשית א" → "בראשית"
+const PARSHA_TO_SEFER: Record<string, string> = {
+  // בראשית
+  'בראשית': 'בראשית', 'נח': 'בראשית', 'לך לך': 'בראשית', 'וירא': 'בראשית',
+  'חיי שרה': 'בראשית', 'תולדות': 'בראשית', 'ויצא': 'בראשית', 'וישלח': 'בראשית',
+  'וישב': 'בראשית', 'מקץ': 'בראשית', 'ויגש': 'בראשית', 'ויחי': 'בראשית',
+  // שמות
+  'שמות': 'שמות', 'וארא': 'שמות', 'בא': 'שמות', 'בשלח': 'שמות',
+  'יתרו': 'שמות', 'משפטים': 'שמות', 'תרומה': 'שמות', 'תצוה': 'שמות',
+  'תשא': 'שמות', 'ויקהל': 'שמות', 'פקודי': 'שמות',
+  // ויקרא
+  'ויקרא': 'ויקרא', 'צו': 'ויקרא', 'שמיני': 'ויקרא', 'תזריע': 'ויקרא',
+  'מצורע': 'ויקרא', 'אחרי': 'ויקרא', 'קדושים': 'ויקרא', 'אמור': 'ויקרא',
+  'בהר': 'ויקרא', 'בחוקותי': 'ויקרא', 'אחרי מות': 'ויקרא',
+  // במדבר
+  'במדבר': 'במדבר', 'נשא': 'במדבר', 'בהעלותך': 'במדבר', 'שלח': 'במדבר',
+  'קרח': 'במדבר', 'חוקת': 'במדבר', 'בלק': 'במדבר', 'פנחס': 'במדבר',
+  'מטות': 'במדבר', 'מסעי': 'במדבר', 'מטו"מ': 'במדבר', 'מטות מסעי': 'במדבר',
+  // דברים
+  'דברים': 'דברים', 'ואתחנן': 'דברים', 'עקב': 'דברים', 'ראה': 'דברים',
+  'שופטים': 'דברים', 'תצא': 'דברים', 'תבא': 'דברים', 'נצבים': 'דברים',
+  'וילך': 'דברים', 'האזינו': 'דברים', 'נצבים וילך': 'דברים',
+};
 
-function getSeferForTitle(title: string): string {
-  for (const [kw, sefer] of SEFER_KEYWORDS) {
-    if (title.includes(kw)) return sefer;
+const SFARIM = ['בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים'];
+const ORDINALS = new Set(['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י']);
+
+// Strip trailing ordinal letter, e.g. "בראשית א" → "בראשית"
+function stripOrdinal(title: string): string {
+  const parts = title.trim().split(' ');
+  if (parts.length > 1 && ORDINALS.has(parts[parts.length - 1])) {
+    return parts.slice(0, -1).join(' ');
   }
-  return 'מועדים';
+  return title.trim();
+}
+
+// Strip everything after a dash (e.g. "וישלח - י"ט כסלו" → "וישלח")
+function stripNote(title: string): string {
+  const dashIdx = title.indexOf(' - ');
+  return dashIdx !== -1 ? title.slice(0, dashIdx).trim() : title;
+}
+
+function getSeferForTitle(rawTitle: string): string {
+  const title = stripOrdinal(stripNote(rawTitle));
+  return PARSHA_TO_SEFER[title] ?? 'מועדים';
 }
 
 function StatCard({ icon, label, value, sub, accent }: {
@@ -59,13 +82,19 @@ export default function TopStats({ volumes, learned }: Props) {
   const learnedSichos = learnedList.length;
   const learnedPages  = learnedList.reduce((sum, s) => sum + s.pageCount, 0);
   const overallPct    = totalPages === 0 ? 0 : Math.round((learnedPages / totalPages) * 100);
-  const completedVols = volumes.filter((v) => v.sichos.length > 0 && v.sichos.every((s) => learned[s.id])).length;
+  const completedVols = volumes.filter(
+    (v) => v.sichos.length > 0 && v.sichos.every((s) => learned[s.id])
+  ).length;
 
-  const SFARIM = ['בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים', 'מועדים'];
-  const seferStats = SFARIM.map((sefer) => {
+  // Sefer stats — always show all 5 sfarim + מועדים
+  const seferStats = [...SFARIM, 'מועדים'].map((sefer) => {
     const sichos = allSichos.filter((s) => getSeferForTitle(s.title) === sefer);
-    return { name: sefer, total: sichos.length, learned: sichos.filter((s) => learned[s.id]).length };
-  }).filter((s) => s.total > 0);
+    return {
+      name:    sefer,
+      total:   sichos.length,
+      learned: sichos.filter((s) => learned[s.id]).length,
+    };
+  });
 
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-4">
@@ -83,23 +112,35 @@ export default function TopStats({ volumes, learned }: Props) {
           <div className="flex-1 h-1.5 rounded-full bg-[#ddd4c0] overflow-hidden">
             <div className="h-1.5 rounded-full bg-[#0B1F3A] transition-all duration-500" style={{ width: `${overallPct}%` }} />
           </div>
-          <span className="text-xs text-[#4a3f30] font-medium whitespace-nowrap">{learnedPages.toLocaleString()} / {totalPages.toLocaleString()} pp</span>
+          <span className="text-xs text-[#4a3f30] font-medium whitespace-nowrap">
+            {learnedPages.toLocaleString()} / {totalPages.toLocaleString()} pp
+          </span>
         </div>
       )}
 
       <div className="bg-white rounded-xl border border-[#ddd4c0] shadow-sm p-5">
-        <p className="text-xs font-medium text-[#4a3f30] uppercase tracking-widest mb-4">Progress by Sefer</p>
+        <p className="text-xs font-medium text-[#4a3f30] uppercase tracking-widest mb-4">
+          Progress by Sefer
+        </p>
         <div className="flex flex-col gap-3">
           {seferStats.map(({ name, learned: l, total: t }) => {
             const pct = t === 0 ? 0 : Math.round((l / t) * 100);
             return (
               <div key={name} className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-[#1c1610] font-serif w-14 text-right shrink-0" dir="rtl">{name}</span>
+                <span
+                  className="text-xs font-semibold text-[#1c1610] font-serif w-16 text-right shrink-0"
+                  dir="rtl"
+                >
+                  {name}
+                </span>
                 <div className="flex-1 h-2 rounded-full bg-[#ede8df] overflow-hidden">
-                  <div className="h-2 rounded-full bg-[#0B1F3A] transition-all duration-700" style={{ width: `${pct}%` }} />
+                  <div
+                    className="h-2 rounded-full bg-[#0B1F3A] transition-all duration-700"
+                    style={{ width: `${pct}%` }}
+                  />
                 </div>
                 <span className="text-xs text-[#4a3f30] w-9 text-right shrink-0">{pct}%</span>
-                <span className="text-xs text-[#4a3f30]/40 w-14 shrink-0">{l}/{t}</span>
+                <span className="text-xs text-[#4a3f30]/40 w-16 shrink-0">{l} / {t}</span>
               </div>
             );
           })}
