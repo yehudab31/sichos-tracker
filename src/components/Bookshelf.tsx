@@ -11,12 +11,12 @@ interface Props {
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const BOOK_HEIGHT  = 210;
-const EMPTY_BG     = '#1c3a5e';            // medium navy — unlearned area
-const FILL_BG      = '#0B1F3A';            // dark navy  — learned fill
-const TEXT_BRIGHT  = 'rgba(255,255,255,0.92)';
-const TEXT_DIM     = 'rgba(255,255,255,0.65)';
-const LINE_COLOR   = 'rgba(255,255,255,0.28)';
+const BOOK_HEIGHT = 210;
+const EMPTY_BG    = 'rgba(11, 31, 58, 0.06)'; // very light greyish-blue tint
+const FILL_BG     = '#0B1F3A';                 // dark navy fill
+const SPINE_TEXT  = '#0B1F3A';                 // dark text on light bg
+const SPINE_LINE  = 'rgba(11, 31, 58, 0.18)'; // subtle divider lines
+const SPINE_BORDER = 'rgba(11, 31, 58, 0.14)';
 
 // ── Hebrew volume numbers ─────────────────────────────────────────────────────
 
@@ -78,38 +78,11 @@ function calcProgress(volume: Volume, learned: LearnedMap): number {
   return total === 0 ? 0 : done / total;
 }
 
-// ── Spine primitives ──────────────────────────────────────────────────────────
+// ── Spine divider line ────────────────────────────────────────────────────────
 
 function SpineLine() {
   return (
-    <div style={{ width: '62%', height: '1px', background: LINE_COLOR, flexShrink: 0 }} />
-  );
-}
-
-function VText({ children, size, bold = false, color = TEXT_BRIGHT, spacing = '0.08em' }: {
-  children: React.ReactNode;
-  size: number;
-  bold?: boolean;
-  color?: string;
-  spacing?: string;
-}) {
-  return (
-    <span
-      style={{
-        writingMode: 'vertical-rl',
-        transform: 'rotate(180deg)',
-        fontSize: size,
-        fontWeight: bold ? '700' : '400',
-        color,
-        letterSpacing: spacing,
-        fontFamily: 'serif',
-        lineHeight: 1.15,
-        overflow: 'hidden',
-        maxHeight: '100%',
-      }}
-    >
-      {children}
-    </span>
+    <div style={{ width: '68%', height: 1, background: SPINE_LINE, flexShrink: 0 }} />
   );
 }
 
@@ -118,22 +91,19 @@ function VText({ children, size, bold = false, color = TEXT_BRIGHT, spacing = '0
 function BookSpine({ volume, progress, onClick, dimmed }: {
   volume: Volume; progress: number; onClick: () => void; dimmed?: boolean;
 }) {
-  const fillPct = Math.round(progress * 100);
-  const sefarim = getSefarimForVolume(volume);
-  const hebNum  = HEB_NUMS[volume.id] ?? String(volume.id);
-  const seferLabel = sefarim.join(' ');
+  const fillPct  = Math.round(progress * 100);
+  const sefarim  = getSefarimForVolume(volume);
+  const hebNum   = HEB_NUMS[volume.id] ?? String(volume.id);
 
   return (
     <button
       onClick={onClick}
       title={`חלק ${hebNum} — ${fillPct}%`}
-      className={`group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-opacity duration-200 ${dimmed ? 'opacity-20' : 'opacity-100'}`}
+      className={`group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B1F3A]/40 transition-opacity duration-200 ${dimmed ? 'opacity-20' : 'opacity-100'}`}
       style={{ width: '100%' }}
     >
-      {/* % tooltip on hover */}
-      <div
-        className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0B1F3A] text-white text-[10px] font-medium px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-20"
-      >
+      {/* % badge on hover */}
+      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0B1F3A] text-white text-[10px] font-medium px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-20">
         {fillPct}%
       </div>
 
@@ -144,7 +114,8 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
           height: BOOK_HEIGHT,
           background: EMPTY_BG,
           borderRadius: '2px 2px 0 0',
-          boxShadow: '2px 0 8px rgba(0,0,0,0.35), -1px 0 3px rgba(0,0,0,0.2)',
+          border: `1px solid ${SPINE_BORDER}`,
+          boxShadow: '2px 0 6px rgba(0,0,0,0.12), -1px 0 3px rgba(0,0,0,0.06)',
         }}
       >
         {/* Dark fill rising from bottom */}
@@ -153,42 +124,87 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
           style={{ height: `${fillPct}%`, background: FILL_BG }}
         />
 
-        {/* Spine content — above the fill */}
+        {/* Spine text content — sits above the fill */}
         <div
-          className="absolute inset-0 flex flex-col items-center justify-between z-10"
-          style={{ padding: '10px 0' }}
+          className="absolute inset-0 z-10 flex flex-col items-center justify-between"
+          style={{ padding: '8px 4px' }}
         >
           <SpineLine />
 
           {/* לקוטי שיחות */}
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <VText size={6} color={TEXT_DIM} spacing="0.18em">לקוטי שיחות</VText>
+            <span
+              dir="rtl"
+              style={{
+                fontSize: 7,
+                color: SPINE_TEXT,
+                fontFamily: 'serif',
+                textAlign: 'center',
+                lineHeight: 1.45,
+                letterSpacing: '0.06em',
+                opacity: 0.6,
+                wordBreak: 'keep-all',
+                overflowWrap: 'break-word',
+                whiteSpace: 'normal',
+                padding: '0 2px',
+              }}
+            >
+              לקוטי שיחות
+            </span>
           </div>
 
           <SpineLine />
 
-          {/* חלק + number */}
-          <div className="flex flex-[1.6] items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <VText size={12.5} bold spacing="0.04em">{`חלק ${hebNum}`}</VText>
+          {/* חלק + number — largest, most prominent */}
+          <div className="flex flex-[1.5] items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
+            <span
+              dir="rtl"
+              style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: SPINE_TEXT,
+                fontFamily: 'serif',
+                textAlign: 'center',
+                lineHeight: 1.25,
+                letterSpacing: '0.03em',
+              }}
+            >
+              {`חלק ${hebNum}`}
+            </span>
           </div>
 
           <SpineLine />
 
-          {/* Sefer name(s) */}
+          {/* Sefer name(s) — one per line */}
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <VText size={6.5} spacing="0.06em">{seferLabel}</VText>
+            <span
+              dir="rtl"
+              style={{
+                fontSize: 7.5,
+                color: SPINE_TEXT,
+                fontFamily: 'serif',
+                textAlign: 'center',
+                lineHeight: 1.5,
+                opacity: 0.8,
+                whiteSpace: 'pre-line', // respect \n breaks between sefer names
+                padding: '0 2px',
+              }}
+            >
+              {sefarim.join('\n')}
+            </span>
           </div>
 
           <SpineLine />
         </div>
       </div>
 
-      {/* Shelf peg */}
+      {/* Shelf peg at bottom */}
       <div
         style={{
           width: '100%',
           height: 5,
           background: '#06121e',
+          opacity: 0.85,
           borderRadius: '0 0 1px 1px',
         }}
       />
@@ -205,45 +221,40 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volLabel }: {
   return (
     <div
       dir="rtl"
-      className={`flex items-center gap-2 px-4 py-3 border-b border-[#f0ebe3] transition-colors ${isLearned ? 'bg-[#0B1F3A]/5' : 'hover:bg-[#f7f3ed]'}`}
+      className={`flex items-center gap-2 px-4 py-3 border-b border-[#f0ebe3] transition-colors ${
+        isLearned ? 'bg-[#0B1F3A]/5' : 'hover:bg-[#f7f3ed]'
+      }`}
     >
-      {/* Toggle button — rightmost, takes all remaining space */}
+      {/* Toggle — takes all remaining space, rightmost */}
       <button
         onClick={() => onToggle(sicha.id)}
-        className="flex items-center gap-2.5 flex-1 min-w-0 text-right"
+        className="flex items-center gap-2.5 flex-1 min-w-0"
         dir="rtl"
       >
-        {/* Checkbox — rightmost */}
         <div className="flex-shrink-0">
           {isLearned
             ? <CheckSquare size={20} className="text-[#0B1F3A]" />
-            : <Square size={20} className="text-[#ddd4c0]" />}
+            : <Square     size={20} className="text-[#ddd4c0]" />}
         </div>
 
-        {/* Index bubble */}
         <div
           className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border"
           style={{
-            background:   isLearned ? '#0B1F3A' : 'transparent',
-            borderColor:  isLearned ? '#0B1F3A' : '#ddd4c0',
-            color:        isLearned ? '#fff' : '#4a3f30',
+            background:  isLearned ? '#0B1F3A' : 'transparent',
+            borderColor: isLearned ? '#0B1F3A' : '#ddd4c0',
+            color:       isLearned ? '#fff'    : '#4a3f30',
           }}
         >
           {idx + 1}
         </div>
 
-        {/* Title + page ref */}
         <div className="flex-1 min-w-0" dir="rtl">
-          <div
-            className={`text-sm font-semibold font-serif truncate ${isLearned ? 'text-[#0B1F3A]' : 'text-[#1c1610]'}`}
-          >
+          <div className={`text-sm font-semibold font-serif truncate ${isLearned ? 'text-[#0B1F3A]' : 'text-[#1c1610]'}`}>
             {sicha.title}
           </div>
           {(sicha.pageRef || volLabel) && (
             <div className="flex items-center gap-1.5 mt-0.5">
-              {sicha.pageRef && (
-                <span className="text-xs text-[#4a3f30]/60">{sicha.pageRef}</span>
-              )}
+              {sicha.pageRef && <span className="text-xs text-[#4a3f30]/60">{sicha.pageRef}</span>}
               {volLabel && (
                 <span className="text-[10px] bg-[#f0ebe3] text-[#4a3f30] px-1.5 py-0.5 rounded font-serif">
                   {volLabel}
@@ -286,18 +297,16 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
   const total      = volume.sichos.reduce((s, x) => s + x.pageCount, 0);
   const learnedPgs = volume.sichos.filter(x => learned[x.id]).reduce((s, x) => s + x.pageCount, 0);
   const fillPct    = total === 0 ? 0 : Math.round((learnedPgs / total) * 100);
+  const hebNum     = HEB_NUMS[volume.id] ?? String(volume.id);
 
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col">
 
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#ddd4c0]">
           <div dir="rtl">
-            <h2 className="text-lg font-semibold text-[#1c1610] font-serif">
-              {`חלק ${HEB_NUMS[volume.id] ?? volume.id}`}
-            </h2>
+            <h2 className="text-lg font-semibold text-[#1c1610] font-serif">{`חלק ${hebNum}`}</h2>
             <p className="text-xs text-[#4a3f30] mt-0.5" dir="ltr">
               {learnedPgs} / {total} pages · {fillPct}% complete
             </p>
@@ -310,7 +319,6 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
           </button>
         </div>
 
-        {/* Progress bar */}
         <div className="px-6 py-3 border-b border-[#ddd4c0] bg-[#f7f3ed]">
           <div className="flex items-center gap-3">
             <div className="flex-1 h-2 rounded-full bg-[#ddd4c0] overflow-hidden">
@@ -325,16 +333,9 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
           </div>
         </div>
 
-        {/* Sicha list */}
         <div className="flex-1 overflow-y-auto py-2">
           {volume.sichos.map((s, i) => (
-            <SichaRow
-              key={s.id}
-              sicha={s}
-              idx={i}
-              isLearned={!!learned[s.id]}
-              onToggle={onToggle}
-            />
+            <SichaRow key={s.id} sicha={s} idx={i} isLearned={!!learned[s.id]} onToggle={onToggle} />
           ))}
         </div>
 
@@ -371,7 +372,9 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
     const q = search.trim();
     return new Set(
       volumes
-        .filter(v => v.sichos.some(s => s.title.includes(q) || s.title.toLowerCase().includes(q.toLowerCase())))
+        .filter(v => v.sichos.some(s =>
+          s.title.includes(q) || s.title.toLowerCase().includes(q.toLowerCase())
+        ))
         .map(v => v.id)
     );
   }, [searchResults, volumes, search]);
@@ -383,7 +386,7 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
         <p className="text-sm text-[#4a3f30] mt-0.5">Track your Likkutei Sichos learning</p>
       </div>
 
-      {/* Search bar */}
+      {/* Search */}
       <div className="relative mb-4">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a3f30]/40 pointer-events-none" />
         <input
@@ -421,12 +424,8 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
             <div className="max-h-96 overflow-y-auto">
               {searchResults.map(({ sicha, volLabel, idx }) => (
                 <SichaRow
-                  key={sicha.id}
-                  sicha={sicha}
-                  idx={idx}
-                  isLearned={!!learned[sicha.id]}
-                  onToggle={onToggle}
-                  volLabel={volLabel}
+                  key={sicha.id} sicha={sicha} idx={idx}
+                  isLearned={!!learned[sicha.id]} onToggle={onToggle} volLabel={volLabel}
                 />
               ))}
             </div>
@@ -444,7 +443,7 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
         </div>
 
         <div className="px-6 pt-10 pb-3">
-          {/* 13 × 3 grid, RTL so vol 1 is top-right */}
+          {/* 13 × 3 grid, RTL — vol 1 top-right */}
           <div
             dir="rtl"
             style={{
@@ -469,10 +468,9 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
           <div
             style={{
               height: 14,
-              marginTop: 0,
               background: 'linear-gradient(180deg, #c8b89a 0%, #a08860 100%)',
               borderRadius: '0 0 4px 4px',
-              boxShadow: '0 5px 12px rgba(0,0,0,0.25)',
+              boxShadow: '0 5px 12px rgba(0,0,0,0.22)',
             }}
           />
         </div>
@@ -484,10 +482,8 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
 
       {openVolume && (
         <SichaDrawer
-          volume={openVolume}
-          learned={learned}
-          onToggle={onToggle}
-          onClose={() => setOpenVolume(null)}
+          volume={openVolume} learned={learned}
+          onToggle={onToggle} onClose={() => setOpenVolume(null)}
         />
       )}
     </section>
