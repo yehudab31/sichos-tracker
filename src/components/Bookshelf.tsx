@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, CheckSquare, Square, ExternalLink, Search, BookOpen } from 'lucide-react';
+import { X, CheckSquare, Square, Search, BookOpen } from 'lucide-react';
 import type { Volume, Sicha } from '../data/sampleData';
 import type { LearnedMap } from '../hooks/useLearnedState';
 
@@ -11,13 +11,16 @@ interface Props {
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const BOOK_HEIGHT   = 210;
-const EMPTY_BG      = 'rgba(11, 31, 58, 0.06)';
-const FILL_BG       = '#0B1F3A';
+const BOOK_HEIGHT = 210;
+const EMPTY_BG    = 'rgba(11, 31, 58, 0.06)';
+const FILL_BG     = '#0B1F3A';
+
+// Crisp 1px black outline — readable on both light empty and dark filled background
 const SPINE_TEXT_STYLE = {
-  color: 'rgba(255, 255, 255, 0.95)',
-  textShadow: '0 1px 3px rgba(0,0,0,0.55), 0 0 6px rgba(11,31,58,0.8)',
+  color: 'rgba(255, 255, 255, 0.97)',
+  textShadow: '-1px -1px 0 rgba(0,0,0,0.85), 1px -1px 0 rgba(0,0,0,0.85), -1px 1px 0 rgba(0,0,0,0.85), 1px 1px 0 rgba(0,0,0,0.85)',
 } as const;
+
 const SPINE_LINE = 'rgba(255, 255, 255, 0.35)';
 
 // ── Hebrew volume numbers ─────────────────────────────────────────────────────
@@ -29,11 +32,13 @@ const HEB_NUMS: Record<number, string> = {
   31:'לא', 32:'לב', 33:'לג', 34:'לד', 35:'לה', 36:'לו', 37:'לז', 38:'לח', 39:'לט',
 };
 
-// ── dach.dev link — computed directly from sicha id ──────────────────────────
-// sicha.id format: "1-1", "2-3" → https://dach.dev/book/likkutei-sichos/viewer/1_1
+// ── dach.dev URL — extracted from pageRef ─────────────────────────────────────
+// pageRef format: "ח"ב ע' 320"  →  viewer/320_2
 
-function dachUrl(sichaId: string): string {
-  return `https://dach.dev/book/likkutei-sichos/viewer/${sichaId.replace('-', '_')}`;
+function getDachUrl(sicha: Sicha, volId: number): string {
+  const m = sicha.pageRef?.match(/ע[^0-9]*(\d+)/);
+  if (m) return `https://dach.dev/book/likkutei-sichos/viewer/${m[1]}_${volId}`;
+  return `https://dach.dev/book/likkutei-sichos/toc?volume=${volId}`;
 }
 
 // ── Sefer helpers ─────────────────────────────────────────────────────────────
@@ -44,17 +49,20 @@ const PARSHA_TO_SEFER: Record<string, string> = {
   'תולדות':'בראשית','ויצא':'בראשית','וישלח':'בראשית',
   'וישב':'בראשית','מקץ':'בראשית','ויגש':'בראשית','ויחי':'בראשית',
   'שמות':'שמות','וארא':'שמות','וא"ר':'שמות','בא':'שמות','בשלח':'שמות',
-  'יתרו':'שמות','משפטים':'שמות','תרומה':'שמות','תצוה':'שמות','כי תשא':'שמות',
-  'תשא':'שמות','ויקהל':'שמות','פקודי':'שמות','ויקהל פקודי':'שמות','ויקהל-פקודי':'שמות',
+  'יתרו':'שמות','משפטים':'שמות','תרומה':'שמות','תצוה':'שמות',
+  'כי תשא':'שמות','תשא':'שמות','ויקהל':'שמות','פקודי':'שמות',
+  'ויקהל פקודי':'שמות','ויקהל-פקודי':'שמות',
   'ויקרא':'ויקרא','צו':'ויקרא','שמיני':'ויקרא','תזריע':'ויקרא',
   'מצורע':'ויקרא','תזריע מצורע':'ויקרא','תזריע-מצורע':'ויקרא',
   'אחרי':'ויקרא','אחרי מות':'ויקרא','קדושים':'ויקרא',
   'אחרי קדושים':'ויקרא','אחרי-קדושים':'ויקרא',
   'אמור':'ויקרא','בהר':'ויקרא','בחוקותי':'ויקרא',
   'בהר בחוקותי':'ויקרא','בהר-בחוקותי':'ויקרא',
-  'במדבר':'במדבר','נשא':'במדבר','בהעלותך':'במדבר','שלח':'במדבר','שלח לך':'במדבר',
+  'במדבר':'במדבר','נשא':'במדבר','בהעלותך':'במדבר',
+  'שלח':'במדבר','שלח לך':'במדבר',
   'קרח':'במדבר','חוקת':'במדבר','חקת':'במדבר','בלק':'במדבר','פנחס':'במדבר',
-  'מטות':'במדבר','מסעי':'במדבר','מטות מסעי':'במדבר','מטות-מסעי':'במדבר','מטו"מ':'במדבר',
+  'מטות':'במדבר','מסעי':'במדבר','מטות מסעי':'במדבר',
+  'מטות-מסעי':'במדבר','מטו"מ':'במדבר',
   'דברים':'דברים','ואתחנן':'דברים','עקב':'דברים','ראה':'דברים',
   'שופטים':'דברים','תצא':'דברים','כי תצא':'דברים',
   'תבא':'דברים','כי תבא':'דברים','נצבים':'דברים',
@@ -75,10 +83,21 @@ function cleanTitle(raw: string): string {
   return t;
 }
 
+function getSeferForTitle(raw: string): string | null {
+  const t = cleanTitle(raw);
+  // Exact match
+  if (PARSHA_TO_SEFER[t]) return PARSHA_TO_SEFER[t];
+  // Partial match — title contains a known parsha key (handles "ויקהל פקודי ב" etc.)
+  for (const [key, sefer] of Object.entries(PARSHA_TO_SEFER)) {
+    if (t.includes(key)) return sefer;
+  }
+  return null;
+}
+
 function getSefarimForVolume(volume: Volume): string[] {
   const found = new Set<string>();
   for (const s of volume.sichos) {
-    const sefer = PARSHA_TO_SEFER[cleanTitle(s.title)];
+    const sefer = getSeferForTitle(s.title);
     if (sefer) found.add(sefer);
   }
   return SEFER_ORDER.filter(s => found.has(s));
@@ -115,33 +134,42 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
       <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0B1F3A] text-white text-[10px] font-medium px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-20">
         {fillPct}%
       </div>
+
       <div
         className="relative overflow-hidden w-full transition-transform duration-200 group-hover:scale-[1.04] group-hover:-translate-y-1.5"
         style={{ height: BOOK_HEIGHT, background: EMPTY_BG, borderRadius: '2px 2px 0 0', border: '1px solid rgba(11,31,58,0.13)', boxShadow: '2px 0 6px rgba(0,0,0,0.1), -1px 0 3px rgba(0,0,0,0.05)' }}
       >
         <div className="absolute bottom-0 left-0 right-0 transition-all duration-700" style={{ height: `${fillPct}%`, background: FILL_BG }} />
+
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-between" style={{ padding: '8px 3px' }}>
           <SpineLine />
+
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span dir="rtl" style={{ fontSize: 7, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.45, letterSpacing: '0.07em', padding: '0 2px', ...SPINE_TEXT_STYLE, opacity: 0.8 }}>
+            <span dir="rtl" style={{ fontSize: 7, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.45, letterSpacing: '0.07em', padding: '0 2px', ...SPINE_TEXT_STYLE, opacity: 0.85 }}>
               לקוטי שיחות
             </span>
           </div>
+
           <SpineLine />
+
           <div className="flex flex-[1.5] items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
             <span dir="rtl" style={{ fontSize: 12, fontWeight: '700', fontFamily: 'serif', textAlign: 'center', lineHeight: 1.2, ...SPINE_TEXT_STYLE }}>
               {`חלק ${hebNum}`}
             </span>
           </div>
+
           <SpineLine />
+
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
             <span dir="rtl" style={{ fontSize: 7.5, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.5, whiteSpace: 'pre-line', padding: '0 2px', ...SPINE_TEXT_STYLE, opacity: 0.9 }}>
               {sefarim.join('\n')}
             </span>
           </div>
+
           <SpineLine />
         </div>
       </div>
+
       <div style={{ width: '100%', height: 5, background: '#06121e', opacity: 0.85, borderRadius: '0 0 1px 1px' }} />
     </button>
   );
@@ -149,11 +177,17 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
 
 // ── SichaRow ──────────────────────────────────────────────────────────────────
 
-function SichaRow({ sicha, idx, isLearned, onToggle, volLabel }: {
+function SichaRow({ sicha, idx, isLearned, onToggle, volId, volLabel }: {
   sicha: Sicha; idx: number; isLearned: boolean;
-  onToggle: (id: string) => void; volLabel?: string;
+  onToggle: (id: string) => void; volId: number; volLabel?: string;
 }) {
-  const dach = dachUrl(sicha.id);
+  const dach = getDachUrl(sicha, volId);
+
+  function openDach(e: React.MouseEvent) {
+    e.stopPropagation();
+    // Use window.open to guarantee new tab and prevent current page navigation
+    window.open(dach, '_blank', 'noopener,noreferrer');
+  }
 
   return (
     <div
@@ -188,31 +222,14 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volLabel }: {
         <span className="text-[10px] text-[#4a3f30]/60 ml-0.5">pp</span>
       </div>
 
-      {/* dach.dev — read full text + AI guide */}
-      <a
-        href={dach}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={e => e.stopPropagation()}
-        title="Open on dach.dev — full text + AI study guide"
+      {/* dach.dev — opens in new tab via window.open so drawer stays open on return */}
+      <button
+        onClick={openDach}
+        title="Read on dach.dev"
         className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-[#4a3f30]/40 hover:text-[#0B1F3A] hover:bg-[#eee8de] transition-colors"
       >
         <BookOpen size={13} />
-      </a>
-
-      {/* PDF link — only show if available */}
-      {sicha.pdfUrl && (
-        <a
-          href={sicha.pdfUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-          title="Open PDF"
-          className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-[#4a3f30]/40 hover:text-[#0B1F3A] hover:bg-[#eee8de] transition-colors"
-        >
-          <ExternalLink size={13} />
-        </a>
-      )}
+      </button>
     </div>
   );
 }
@@ -234,7 +251,7 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#ddd4c0]">
           <div dir="rtl">
             <h2 className="text-lg font-semibold text-[#1c1610] font-serif">{`חלק ${hebNum}`}</h2>
-            <p className="text-xs text-[#4a3f30] mt-0.5" dir="ltr">{learnedPgs} / {total} pages · {fillPct}% complete</p>
+            <p className="text-xs text-[#4a3f30] mt-0.5">{learnedPgs} / {total} pages · {fillPct}% complete</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[#4a3f30] hover:bg-[#f7f3ed] transition-colors">
             <X size={16} />
@@ -245,18 +262,18 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
             <div className="flex-1 h-2 rounded-full bg-[#ddd4c0] overflow-hidden">
               <div className="h-2 rounded-full bg-[#0B1F3A] transition-all duration-500" style={{ width: `${fillPct}%` }} />
             </div>
-            <span className="text-xs font-semibold text-[#0B1F3A] w-8 text-right" dir="ltr">{fillPct}%</span>
+            <span className="text-xs font-semibold text-[#0B1F3A]">{fillPct}%</span>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           {volume.sichos.map((s, i) => (
-            <SichaRow key={s.id} sicha={s} idx={i} isLearned={!!learned[s.id]} onToggle={onToggle} />
+            <SichaRow key={s.id} sicha={s} idx={i} isLearned={!!learned[s.id]} onToggle={onToggle} volId={volume.id} />
           ))}
         </div>
         <div className="px-6 py-4 border-t border-[#ddd4c0] bg-[#f7f3ed]">
           <p className="text-xs text-[#4a3f30]/70 text-center">
             <BookOpen size={10} className="inline mr-1" />
-            Click the book icon on any sicha to read it on dach.dev
+            Book icon opens the sicha on dach.dev in a new tab
           </p>
         </div>
       </div>
@@ -273,11 +290,11 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
   const searchResults = useMemo(() => {
     const q = search.trim();
     if (!q) return null;
-    const hits: { sicha: Sicha; volLabel: string; idx: number }[] = [];
+    const hits: { sicha: Sicha; vol: Volume; idx: number }[] = [];
     for (const vol of volumes) {
       vol.sichos.forEach((s, i) => {
         if (s.title.includes(q) || s.title.toLowerCase().includes(q.toLowerCase())) {
-          hits.push({ sicha: s, volLabel: `חלק ${HEB_NUMS[vol.id] ?? vol.id}`, idx: i });
+          hits.push({ sicha: s, vol, idx: i });
         }
       });
     }
@@ -286,9 +303,8 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
 
   const matchingVolIds = useMemo(() => {
     if (!searchResults) return null;
-    const q = search.trim();
-    return new Set(volumes.filter(v => v.sichos.some(s => s.title.includes(q) || s.title.toLowerCase().includes(q.toLowerCase()))).map(v => v.id));
-  }, [searchResults, volumes, search]);
+    return new Set(searchResults.map(r => r.vol.id));
+  }, [searchResults]);
 
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-14">
@@ -321,8 +337,12 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
           </div>
           {searchResults.length > 0 && (
             <div className="max-h-96 overflow-y-auto">
-              {searchResults.map(({ sicha, volLabel, idx }) => (
-                <SichaRow key={sicha.id} sicha={sicha} idx={idx} isLearned={!!learned[sicha.id]} onToggle={onToggle} volLabel={volLabel} />
+              {searchResults.map(({ sicha, vol, idx }) => (
+                <SichaRow
+                  key={sicha.id} sicha={sicha} idx={idx}
+                  isLearned={!!learned[sicha.id]} onToggle={onToggle}
+                  volId={vol.id} volLabel={`חלק ${HEB_NUMS[vol.id] ?? vol.id}`}
+                />
               ))}
             </div>
           )}
@@ -337,7 +357,9 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
         <div className="px-6 pt-10 pb-3">
           <div dir="rtl" style={{ display: 'grid', gridTemplateColumns: 'repeat(13, minmax(0, 1fr))', gap: '6px', alignItems: 'end' }}>
             {volumes.map(vol => (
-              <BookSpine key={vol.id} volume={vol} progress={calcProgress(vol, learned)} onClick={() => setOpenVolume(vol)} dimmed={matchingVolIds !== null && !matchingVolIds.has(vol.id)} />
+              <BookSpine key={vol.id} volume={vol} progress={calcProgress(vol, learned)}
+                onClick={() => setOpenVolume(vol)}
+                dimmed={matchingVolIds !== null && !matchingVolIds.has(vol.id)} />
             ))}
           </div>
           <div style={{ height: 14, background: 'linear-gradient(180deg, #c8b89a 0%, #a08860 100%)', borderRadius: '0 0 4px 4px', boxShadow: '0 5px 12px rgba(0,0,0,0.22)' }} />
@@ -345,7 +367,9 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
         <p className="text-xs text-[#4a3f30]/50 text-center py-4">Click a volume to track which sichos you have learned</p>
       </div>
 
-      {openVolume && <SichaDrawer volume={openVolume} learned={learned} onToggle={onToggle} onClose={() => setOpenVolume(null)} />}
+      {openVolume && (
+        <SichaDrawer volume={openVolume} learned={learned} onToggle={onToggle} onClose={() => setOpenVolume(null)} />
+      )}
     </section>
   );
 }
