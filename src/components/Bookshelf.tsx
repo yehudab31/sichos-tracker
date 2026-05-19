@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { X, CheckSquare, Square, Search, BookOpen } from 'lucide-react';
 import type { Volume, Sicha } from '../data/sampleData';
 import type { LearnedMap } from '../hooks/useLearnedState';
@@ -15,13 +15,20 @@ const BOOK_HEIGHT = 210;
 const EMPTY_BG    = 'rgba(11, 31, 58, 0.06)';
 const FILL_BG     = '#0B1F3A';
 
-// Crisp 1px black outline — readable on both light empty and dark filled background
+// Elegant text style — white text with subtle navy outline + soft drop shadow.
+// Navy outline (not pure black) reads clean on both the light empty area and dark fill.
 const SPINE_TEXT_STYLE = {
-  color: 'rgba(255, 255, 255, 0.97)',
-  textShadow: '-1px -1px 0 rgba(0,0,0,0.85), 1px -1px 0 rgba(0,0,0,0.85), -1px 1px 0 rgba(0,0,0,0.85), 1px 1px 0 rgba(0,0,0,0.85)',
+  color: '#f8fafc',
+  textShadow: [
+    '-1px -1px 0 rgba(10, 31, 51, 0.85)',
+    ' 1px -1px 0 rgba(10, 31, 51, 0.85)',
+    '-1px  1px 0 rgba(10, 31, 51, 0.85)',
+    ' 1px  1px 0 rgba(10, 31, 51, 0.85)',
+    ' 0px  2px 4px rgba(0, 0, 0, 0.30)',
+  ].join(','),
 } as const;
 
-const SPINE_LINE = 'rgba(255, 255, 255, 0.35)';
+const SPINE_LINE = 'rgba(255, 255, 255, 0.32)';
 
 // ── Hebrew volume numbers ─────────────────────────────────────────────────────
 
@@ -32,8 +39,99 @@ const HEB_NUMS: Record<number, string> = {
   31:'לא', 32:'לב', 33:'לג', 34:'לד', 35:'לה', 36:'לו', 37:'לז', 38:'לח', 39:'לט',
 };
 
-// ── dach.dev URL — extracted from pageRef ─────────────────────────────────────
-// pageRef format: "ח"ב ע' 320"  →  viewer/320_2
+// ── English → Hebrew parsha search map ───────────────────────────────────────
+
+const EN_TO_HE: Record<string, string> = {
+  // Bereishis
+  'bereishis':'בראשית','bereishit':'בראשית','genesis':'בראשית','bereshit':'בראשית',
+  'noach':'נח','noah':'נח',
+  'lech lecha':'לך לך','lech':'לך לך','lecha':'לך לך',
+  'vayeira':'וירא','vayera':'וירא','vayerah':'וירא',
+  'chayei sarah':'חיי שרה','chaye sara':'חיי שרה','chayei sara':'חיי שרה',
+  'toldos':'תולדות','toldot':'תולדות',
+  'vayeitzei':'ויצא','vayetzei':'ויצא','vayetze':'ויצא',
+  'vayishlach':'וישלח',
+  'vayeishev':'וישב','vayeshev':'וישב',
+  'mikeitz':'מקץ','miketz':'מקץ',
+  'vayigash':'ויגש',
+  'vayechi':'ויחי','vaychi':'ויחי','vayechee':'ויחי',
+  // Shemos
+  'shemos':'שמות','shemot':'שמות','exodus':'שמות',
+  'vaeira':'וארא','va\'eira':'וארא','bo':'בא',
+  'beshalach':'בשלח',
+  'yisro':'יתרו','yitro':'יתרו','jethro':'יתרו',
+  'mishpatim':'משפטים',
+  'terumah':'תרומה','trumah':'תרומה',
+  'tetzaveh':'תצוה','titzaveh':'תצוה','tetzave':'תצוה',
+  'ki sisa':'תשא','ki tisa':'תשא','tisa':'תשא','ki sisah':'תשא',
+  'vayakhel':'ויקהל','vayakheil':'ויקהל',
+  'pekudei':'פקודי','pikudei':'פקודי',
+  // Vayikra
+  'vayikra':'ויקרא','leviticus':'ויקרא',
+  'tzav':'צו','zav':'צו',
+  'shemini':'שמיני','shmini':'שמיני',
+  'tazria':'תזריע','tazriah':'תזריע',
+  'metzora':'מצורע','metzorah':'מצורע',
+  'acharei':'אחרי','achrei':'אחרי','acharei mos':'אחרי',
+  'kedoshim':'קדושים',
+  'emor':'אמור',
+  'behar':'בהר',
+  'bechukosai':'בחוקותי','bechukotai':'בחוקותי','bichukosai':'בחוקותי',
+  // Bamidbar
+  'bamidbar':'במדבר','numbers':'במדבר',
+  'naso':'נשא','nasso':'נשא',
+  'behaaloscha':'בהעלותך','beha\'aloscha':'בהעלותך','behaalosecho':'בהעלותך',
+  'shlach':'שלח','shelach':'שלח','shalach':'שלח',
+  'korach':'קרח',
+  'chukas':'חוקת','chukat':'חוקת','hukat':'חוקת',
+  'balak':'בלק',
+  'pinchas':'פנחס','pinchus':'פנחס',
+  'mattos':'מטות','matot':'מטות','matos':'מטות',
+  'masei':'מסעי','massei':'מסעי',
+  // Devarim
+  'devarim':'דברים','deuteronomy':'דברים',
+  'vaeschanan':'ואתחנן','vaetchanan':'ואתחנן','veeschanan':'ואתחנן',
+  'eikev':'עקב','ekev':'עקב',
+  'reeh':'ראה','re\'eh':'ראה','raeh':'ראה',
+  'shoftim':'שופטים','shofetim':'שופטים',
+  'ki seitzei':'תצא','ki tetzei':'תצא','tetzei':'תצא','ki seitze':'תצא',
+  'ki savo':'תבא','ki tavo':'תבא','tavo':'תבא',
+  'nitzavim':'נצבים','netzavim':'נצבים',
+  'vayelech':'וילך','vayeilech':'וילך',
+  'haazinu':'האזינו',
+  // Moadim / special
+  'chanukah':'חנוכה','hanukkah':'חנוכה','hanukah':'חנוכה',
+  'purim':'פורים',
+  'pesach':'חה"פ','passover':'חה"פ',
+  'shavuos':'חה"ש','shavuot':'חה"ש',
+  'sukkos':'חה"ס','sukkot':'חה"ס','sukkot':'חה"ס',
+  'rosh hashana':'ר"ה','rosh hashanah':'ר"ה',
+  'yom kippur':'ש"ת',
+};
+
+function getHebrewQuery(q: string): string | null {
+  const lower = q.toLowerCase().trim();
+  // Exact match first
+  if (EN_TO_HE[lower]) return EN_TO_HE[lower];
+  // Prefix match (e.g. "ber" → "bereishis")
+  for (const [eng, heb] of Object.entries(EN_TO_HE)) {
+    if (eng.startsWith(lower) && lower.length >= 3) return heb;
+  }
+  return null;
+}
+
+function matchesSicha(sicha: Sicha, q: string): boolean {
+  if (!q.trim()) return false;
+  const lower = q.toLowerCase();
+  // Hebrew direct match
+  if (sicha.title.includes(q) || sicha.title.toLowerCase().includes(lower)) return true;
+  // English → Hebrew lookup
+  const heb = getHebrewQuery(q);
+  if (heb && sicha.title.includes(heb)) return true;
+  return false;
+}
+
+// ── dach.dev URL from pageRef ─────────────────────────────────────────────────
 
 function getDachUrl(sicha: Sicha, volId: number): string {
   const m = sicha.pageRef?.match(/ע[^0-9]*(\d+)/);
@@ -48,7 +146,7 @@ const PARSHA_TO_SEFER: Record<string, string> = {
   'וירא':'בראשית','חיי שרה':'בראשית','חיי-שרה':'בראשית',
   'תולדות':'בראשית','ויצא':'בראשית','וישלח':'בראשית',
   'וישב':'בראשית','מקץ':'בראשית','ויגש':'בראשית','ויחי':'בראשית',
-  'שמות':'שמות','וארא':'שמות','וא"ר':'שמות','בא':'שמות','בשלח':'שמות',
+  'שמות':'שמות','וארא':'שמות','בא':'שמות','בשלח':'שמות',
   'יתרו':'שמות','משפטים':'שמות','תרומה':'שמות','תצוה':'שמות',
   'כי תשא':'שמות','תשא':'שמות','ויקהל':'שמות','פקודי':'שמות',
   'ויקהל פקודי':'שמות','ויקהל-פקודי':'שמות',
@@ -61,8 +159,7 @@ const PARSHA_TO_SEFER: Record<string, string> = {
   'במדבר':'במדבר','נשא':'במדבר','בהעלותך':'במדבר',
   'שלח':'במדבר','שלח לך':'במדבר',
   'קרח':'במדבר','חוקת':'במדבר','חקת':'במדבר','בלק':'במדבר','פנחס':'במדבר',
-  'מטות':'במדבר','מסעי':'במדבר','מטות מסעי':'במדבר',
-  'מטות-מסעי':'במדבר','מטו"מ':'במדבר',
+  'מטות':'במדבר','מסעי':'במדבר','מטות מסעי':'במדבר','מטות-מסעי':'במדבר','מטו"מ':'במדבר',
   'דברים':'דברים','ואתחנן':'דברים','עקב':'דברים','ראה':'דברים',
   'שופטים':'דברים','תצא':'דברים','כי תצא':'דברים',
   'תבא':'דברים','כי תבא':'דברים','נצבים':'דברים',
@@ -85,9 +182,7 @@ function cleanTitle(raw: string): string {
 
 function getSeferForTitle(raw: string): string | null {
   const t = cleanTitle(raw);
-  // Exact match
   if (PARSHA_TO_SEFER[t]) return PARSHA_TO_SEFER[t];
-  // Partial match — title contains a known parsha key (handles "ויקהל פקודי ב" etc.)
   for (const [key, sefer] of Object.entries(PARSHA_TO_SEFER)) {
     if (t.includes(key)) return sefer;
   }
@@ -145,7 +240,7 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
           <SpineLine />
 
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span dir="rtl" style={{ fontSize: 7, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.45, letterSpacing: '0.07em', padding: '0 2px', ...SPINE_TEXT_STYLE, opacity: 0.85 }}>
+            <span dir="rtl" style={{ fontSize: 7, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.45, letterSpacing: '0.07em', padding: '0 2px', ...SPINE_TEXT_STYLE }}>
               לקוטי שיחות
             </span>
           </div>
@@ -161,7 +256,7 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
           <SpineLine />
 
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span dir="rtl" style={{ fontSize: 7.5, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.5, whiteSpace: 'pre-line', padding: '0 2px', ...SPINE_TEXT_STYLE, opacity: 0.9 }}>
+            <span dir="rtl" style={{ fontSize: 7.5, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.5, whiteSpace: 'pre-line', padding: '0 2px', ...SPINE_TEXT_STYLE }}>
               {sefarim.join('\n')}
             </span>
           </div>
@@ -183,10 +278,17 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volId, volLabel }: {
 }) {
   const dach = getDachUrl(sicha, volId);
 
+  // Use programmatic <a> click — more reliable than window.open for new tab
+  // and won't navigate the current tab (avoids drawer close on return)
   function openDach(e: React.MouseEvent) {
     e.stopPropagation();
-    // Use window.open to guarantee new tab and prevent current page navigation
-    window.open(dach, '_blank', 'noopener,noreferrer');
+    const a = document.createElement('a');
+    a.href = dach;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   return (
@@ -194,7 +296,6 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volId, volLabel }: {
       dir="rtl"
       className={`flex items-center gap-2 px-4 py-3 border-b border-[#f0ebe3] transition-colors ${isLearned ? 'bg-[#0B1F3A]/5' : 'hover:bg-[#f7f3ed]'}`}
     >
-      {/* Toggle button — rightmost */}
       <button onClick={() => onToggle(sicha.id)} className="flex items-center gap-2.5 flex-1 min-w-0" dir="rtl">
         <div className="flex-shrink-0">
           {isLearned ? <CheckSquare size={20} className="text-[#0B1F3A]" /> : <Square size={20} className="text-[#ddd4c0]" />}
@@ -216,13 +317,11 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volId, volLabel }: {
         </div>
       </button>
 
-      {/* Page count */}
       <div className="flex-shrink-0" dir="ltr">
         <span className="text-xs font-medium text-[#4a3f30]">{sicha.pageCount}</span>
         <span className="text-[10px] text-[#4a3f30]/60 ml-0.5">pp</span>
       </div>
 
-      {/* dach.dev — opens in new tab via window.open so drawer stays open on return */}
       <button
         onClick={openDach}
         title="Read on dach.dev"
@@ -283,9 +382,37 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+const SESSION_KEY = 'sichosTracker_openVolumeId';
+
 export default function Bookshelf({ volumes, learned, onToggle }: Props) {
-  const [openVolume, setOpenVolume] = useState<Volume | null>(null);
-  const [search, setSearch]         = useState('');
+  const [search, setSearch] = useState('');
+
+  // Persist open volume in sessionStorage so drawer survives tab switching
+  const [openVolumeId, setOpenVolumeId] = useState<number | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      return saved ? Number(saved) : null;
+    } catch { return null; }
+  });
+
+  const openVolume = useMemo(
+    () => openVolumeId != null ? (volumes.find(v => v.id === openVolumeId) ?? null) : null,
+    [openVolumeId, volumes]
+  );
+
+  function openVol(vol: Volume | null) {
+    const id = vol?.id ?? null;
+    setOpenVolumeId(id);
+    try {
+      if (id != null) sessionStorage.setItem(SESSION_KEY, String(id));
+      else sessionStorage.removeItem(SESSION_KEY);
+    } catch {}
+  }
+
+  // Clear saved state if user explicitly closes drawer
+  function closeDrawer() {
+    openVol(null);
+  }
 
   const searchResults = useMemo(() => {
     const q = search.trim();
@@ -293,9 +420,7 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
     const hits: { sicha: Sicha; vol: Volume; idx: number }[] = [];
     for (const vol of volumes) {
       vol.sichos.forEach((s, i) => {
-        if (s.title.includes(q) || s.title.toLowerCase().includes(q.toLowerCase())) {
-          hits.push({ sicha: s, vol, idx: i });
-        }
+        if (matchesSicha(s, q)) hits.push({ sicha: s, vol, idx: i });
       });
     }
     return hits;
@@ -313,13 +438,15 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
         <p className="text-sm text-[#4a3f30] mt-0.5">Track your Likkutei Sichos learning</p>
       </div>
 
+      {/* Search — Hebrew and English */}
       <div className="relative mb-4">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a3f30]/40 pointer-events-none" />
         <input
-          type="text" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="חפש שיחה… e.g. בראשית, חנוכה, פורים"
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search: בראשית, Bereishis, Noach, Chanukah…"
           className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-[#ddd4c0] bg-white text-[#1c1610] placeholder:text-[#4a3f30]/40 focus:outline-none focus:ring-2 focus:ring-[#0B1F3A]/20 focus:border-[#0B1F3A] transition-all"
-          dir="rtl"
         />
         {search && (
           <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a3f30]/40 hover:text-[#4a3f30]">
@@ -352,14 +479,23 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
       <div className="bg-white rounded-2xl border border-[#ddd4c0] shadow-sm overflow-hidden">
         <div className="bg-[#f7f3ed] px-6 py-3 border-b border-[#ddd4c0] flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#0B1F3A]/30" />
-          <span className="text-xs text-[#4a3f30] font-medium tracking-wide uppercase">לקוטי שיחות — {volumes.length} חלקים</span>
+          <span className="text-xs text-[#4a3f30] font-medium tracking-wide uppercase">
+            לקוטי שיחות — {volumes.length} חלקים
+          </span>
         </div>
         <div className="px-6 pt-10 pb-3">
-          <div dir="rtl" style={{ display: 'grid', gridTemplateColumns: 'repeat(13, minmax(0, 1fr))', gap: '6px', alignItems: 'end' }}>
+          <div
+            dir="rtl"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(13, minmax(0, 1fr))', gap: '6px', alignItems: 'end' }}
+          >
             {volumes.map(vol => (
-              <BookSpine key={vol.id} volume={vol} progress={calcProgress(vol, learned)}
-                onClick={() => setOpenVolume(vol)}
-                dimmed={matchingVolIds !== null && !matchingVolIds.has(vol.id)} />
+              <BookSpine
+                key={vol.id}
+                volume={vol}
+                progress={calcProgress(vol, learned)}
+                onClick={() => openVol(vol)}
+                dimmed={matchingVolIds !== null && !matchingVolIds.has(vol.id)}
+              />
             ))}
           </div>
           <div style={{ height: 14, background: 'linear-gradient(180deg, #c8b89a 0%, #a08860 100%)', borderRadius: '0 0 4px 4px', boxShadow: '0 5px 12px rgba(0,0,0,0.22)' }} />
@@ -368,7 +504,12 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
       </div>
 
       {openVolume && (
-        <SichaDrawer volume={openVolume} learned={learned} onToggle={onToggle} onClose={() => setOpenVolume(null)} />
+        <SichaDrawer
+          volume={openVolume}
+          learned={learned}
+          onToggle={onToggle}
+          onClose={closeDrawer}
+        />
       )}
     </section>
   );
