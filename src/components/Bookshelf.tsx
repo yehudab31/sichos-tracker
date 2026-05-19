@@ -1,12 +1,17 @@
-import { useState, useMemo, useEffect } from 'react';
-import { X, CheckSquare, Square, Search, BookOpen } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, CheckSquare, Square, Search, BookOpen, Star, Bookmark } from 'lucide-react';
 import type { Volume, Sicha } from '../data/sampleData';
 import type { LearnedMap } from '../hooks/useLearnedState';
+import type { StarsMap } from '../hooks/useSichaStars';
 
 interface Props {
   volumes: Volume[];
   learned: LearnedMap;
+  favorites: StarsMap;
+  bookmarks: StarsMap;
   onToggle: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  onToggleBookmark: (id: string) => void;
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -14,21 +19,11 @@ interface Props {
 const BOOK_HEIGHT = 210;
 const EMPTY_BG    = 'rgba(11, 31, 58, 0.06)';
 const FILL_BG     = '#0B1F3A';
-
-// Elegant text style — white text with subtle navy outline + soft drop shadow.
-// Navy outline (not pure black) reads clean on both the light empty area and dark fill.
-const SPINE_TEXT_STYLE = {
-  color: '#f8fafc',
-  textShadow: [
-    '-1px -1px 0 rgba(10, 31, 51, 0.85)',
-    ' 1px -1px 0 rgba(10, 31, 51, 0.85)',
-    '-1px  1px 0 rgba(10, 31, 51, 0.85)',
-    ' 1px  1px 0 rgba(10, 31, 51, 0.85)',
-    ' 0px  2px 4px rgba(0, 0, 0, 0.30)',
-  ].join(','),
-} as const;
-
-const SPINE_LINE = 'rgba(255, 255, 255, 0.32)';
+// Dark navy text on light background = perfect contrast.
+// When the dark fill rises and covers the text, they merge seamlessly (same color).
+// No outline or shadow needed — this is the cleanest approach.
+const SPINE_TEXT  = '#0B1F3A';
+const SPINE_LINE  = 'rgba(11, 31, 58, 0.2)';
 
 // ── Hebrew volume numbers ─────────────────────────────────────────────────────
 
@@ -39,81 +34,88 @@ const HEB_NUMS: Record<number, string> = {
   31:'לא', 32:'לב', 33:'לג', 34:'לד', 35:'לה', 36:'לו', 37:'לז', 38:'לח', 39:'לט',
 };
 
-// ── English → Hebrew parsha search map ───────────────────────────────────────
+// ── dach.dev ──────────────────────────────────────────────────────────────────
+
+function getDachUrl(sicha: Sicha, volId: number): string {
+  const m = sicha.pageRef?.match(/ע[^0-9]*(\d+)/);
+  return m
+    ? `https://dach.dev/book/likkutei-sichos/viewer/${m[1]}_${volId}`
+    : `https://dach.dev/book/likkutei-sichos/toc?volume=${volId}`;
+}
+
+function openDach(sicha: Sicha, volId: number) {
+  const url = getDachUrl(sicha, volId);
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ── English → Hebrew search ───────────────────────────────────────────────────
 
 const EN_TO_HE: Record<string, string> = {
-  // Bereishis
   'bereishis':'בראשית','bereishit':'בראשית','genesis':'בראשית','bereshit':'בראשית',
   'noach':'נח','noah':'נח',
   'lech lecha':'לך לך','lech':'לך לך','lecha':'לך לך',
-  'vayeira':'וירא','vayera':'וירא','vayerah':'וירא',
-  'chayei sarah':'חיי שרה','chaye sara':'חיי שרה','chayei sara':'חיי שרה',
+  'vayeira':'וירא','vayera':'וירא',
+  'chayei sarah':'חיי שרה','chaye sara':'חיי שרה',
   'toldos':'תולדות','toldot':'תולדות',
-  'vayeitzei':'ויצא','vayetzei':'ויצא','vayetze':'ויצא',
+  'vayeitzei':'ויצא','vayetzei':'ויצא',
   'vayishlach':'וישלח',
   'vayeishev':'וישב','vayeshev':'וישב',
   'mikeitz':'מקץ','miketz':'מקץ',
   'vayigash':'ויגש',
-  'vayechi':'ויחי','vaychi':'ויחי','vayechee':'ויחי',
-  // Shemos
+  'vayechi':'ויחי','vaychi':'ויחי',
   'shemos':'שמות','shemot':'שמות','exodus':'שמות',
-  'vaeira':'וארא','va\'eira':'וארא','bo':'בא',
+  'vaeira':'וארא',"va'eira":'וארא',
+  'bo':'בא',
   'beshalach':'בשלח',
   'yisro':'יתרו','yitro':'יתרו','jethro':'יתרו',
   'mishpatim':'משפטים',
   'terumah':'תרומה','trumah':'תרומה',
-  'tetzaveh':'תצוה','titzaveh':'תצוה','tetzave':'תצוה',
-  'ki sisa':'תשא','ki tisa':'תשא','tisa':'תשא','ki sisah':'תשא',
-  'vayakhel':'ויקהל','vayakheil':'ויקהל',
+  'tetzaveh':'תצוה','titzaveh':'תצוה',
+  'ki sisa':'תשא','ki tisa':'תשא','tisa':'תשא',
+  'vayakhel':'ויקהל',
   'pekudei':'פקודי','pikudei':'פקודי',
-  // Vayikra
   'vayikra':'ויקרא','leviticus':'ויקרא',
   'tzav':'צו','zav':'צו',
   'shemini':'שמיני','shmini':'שמיני',
-  'tazria':'תזריע','tazriah':'תזריע',
+  'tazria':'תזריע',
   'metzora':'מצורע','metzorah':'מצורע',
-  'acharei':'אחרי','achrei':'אחרי','acharei mos':'אחרי',
+  'acharei':'אחרי','achrei':'אחרי',
   'kedoshim':'קדושים',
   'emor':'אמור',
   'behar':'בהר',
-  'bechukosai':'בחוקותי','bechukotai':'בחוקותי','bichukosai':'בחוקותי',
-  // Bamidbar
+  'bechukosai':'בחוקותי','bechukotai':'בחוקותי',
   'bamidbar':'במדבר','numbers':'במדבר',
   'naso':'נשא','nasso':'נשא',
-  'behaaloscha':'בהעלותך','beha\'aloscha':'בהעלותך','behaalosecho':'בהעלותך',
-  'shlach':'שלח','shelach':'שלח','shalach':'שלח',
+  'behaaloscha':'בהעלותך',"beha'aloscha":'בהעלותך',
+  'shlach':'שלח','shelach':'שלח',
   'korach':'קרח',
-  'chukas':'חוקת','chukat':'חוקת','hukat':'חוקת',
+  'chukas':'חוקת','chukat':'חוקת',
   'balak':'בלק',
   'pinchas':'פנחס','pinchus':'פנחס',
   'mattos':'מטות','matot':'מטות','matos':'מטות',
   'masei':'מסעי','massei':'מסעי',
-  // Devarim
   'devarim':'דברים','deuteronomy':'דברים',
-  'vaeschanan':'ואתחנן','vaetchanan':'ואתחנן','veeschanan':'ואתחנן',
+  'vaeschanan':'ואתחנן','vaetchanan':'ואתחנן',
   'eikev':'עקב','ekev':'עקב',
-  'reeh':'ראה','re\'eh':'ראה','raeh':'ראה',
-  'shoftim':'שופטים','shofetim':'שופטים',
-  'ki seitzei':'תצא','ki tetzei':'תצא','tetzei':'תצא','ki seitze':'תצא',
+  'reeh':'ראה',"re'eh":'ראה',
+  'shoftim':'שופטים',
+  'ki seitzei':'תצא','ki tetzei':'תצא','tetzei':'תצא',
   'ki savo':'תבא','ki tavo':'תבא','tavo':'תבא',
   'nitzavim':'נצבים','netzavim':'נצבים',
-  'vayelech':'וילך','vayeilech':'וילך',
+  'vayelech':'וילך',
   'haazinu':'האזינו',
-  // Moadim / special
-  'chanukah':'חנוכה','hanukkah':'חנוכה','hanukah':'חנוכה',
+  'chanukah':'חנוכה','hanukkah':'חנוכה',
   'purim':'פורים',
   'pesach':'חה"פ','passover':'חה"פ',
   'shavuos':'חה"ש','shavuot':'חה"ש',
-  'sukkos':'חה"ס','sukkot':'חה"ס','sukkot':'חה"ס',
-  'rosh hashana':'ר"ה','rosh hashanah':'ר"ה',
-  'yom kippur':'ש"ת',
+  'sukkos':'חה"ס','sukkot':'חה"ס',
 };
 
 function getHebrewQuery(q: string): string | null {
   const lower = q.toLowerCase().trim();
-  // Exact match first
   if (EN_TO_HE[lower]) return EN_TO_HE[lower];
-  // Prefix match (e.g. "ber" → "bereishis")
   for (const [eng, heb] of Object.entries(EN_TO_HE)) {
     if (eng.startsWith(lower) && lower.length >= 3) return heb;
   }
@@ -123,48 +125,33 @@ function getHebrewQuery(q: string): string | null {
 function matchesSicha(sicha: Sicha, q: string): boolean {
   if (!q.trim()) return false;
   const lower = q.toLowerCase();
-  // Hebrew direct match
   if (sicha.title.includes(q) || sicha.title.toLowerCase().includes(lower)) return true;
-  // English → Hebrew lookup
   const heb = getHebrewQuery(q);
-  if (heb && sicha.title.includes(heb)) return true;
-  return false;
-}
-
-// ── dach.dev URL from pageRef ─────────────────────────────────────────────────
-
-function getDachUrl(sicha: Sicha, volId: number): string {
-  const m = sicha.pageRef?.match(/ע[^0-9]*(\d+)/);
-  if (m) return `https://dach.dev/book/likkutei-sichos/viewer/${m[1]}_${volId}`;
-  return `https://dach.dev/book/likkutei-sichos/toc?volume=${volId}`;
+  return !!(heb && sicha.title.includes(heb));
 }
 
 // ── Sefer helpers ─────────────────────────────────────────────────────────────
 
 const PARSHA_TO_SEFER: Record<string, string> = {
-  'בראשית':'בראשית','נח':'בראשית','לך לך':'בראשית','לך-לך':'בראשית',
-  'וירא':'בראשית','חיי שרה':'בראשית','חיי-שרה':'בראשית',
-  'תולדות':'בראשית','ויצא':'בראשית','וישלח':'בראשית',
+  'בראשית':'בראשית','נח':'בראשית','לך לך':'בראשית','וירא':'בראשית',
+  'חיי שרה':'בראשית','תולדות':'בראשית','ויצא':'בראשית','וישלח':'בראשית',
   'וישב':'בראשית','מקץ':'בראשית','ויגש':'בראשית','ויחי':'בראשית',
   'שמות':'שמות','וארא':'שמות','בא':'שמות','בשלח':'שמות',
   'יתרו':'שמות','משפטים':'שמות','תרומה':'שמות','תצוה':'שמות',
   'כי תשא':'שמות','תשא':'שמות','ויקהל':'שמות','פקודי':'שמות',
-  'ויקהל פקודי':'שמות','ויקהל-פקודי':'שמות',
+  'ויקהל פקודי':'שמות',
   'ויקרא':'ויקרא','צו':'ויקרא','שמיני':'ויקרא','תזריע':'ויקרא',
-  'מצורע':'ויקרא','תזריע מצורע':'ויקרא','תזריע-מצורע':'ויקרא',
-  'אחרי':'ויקרא','אחרי מות':'ויקרא','קדושים':'ויקרא',
-  'אחרי קדושים':'ויקרא','אחרי-קדושים':'ויקרא',
-  'אמור':'ויקרא','בהר':'ויקרא','בחוקותי':'ויקרא',
-  'בהר בחוקותי':'ויקרא','בהר-בחוקותי':'ויקרא',
-  'במדבר':'במדבר','נשא':'במדבר','בהעלותך':'במדבר',
-  'שלח':'במדבר','שלח לך':'במדבר',
-  'קרח':'במדבר','חוקת':'במדבר','חקת':'במדבר','בלק':'במדבר','פנחס':'במדבר',
-  'מטות':'במדבר','מסעי':'במדבר','מטות מסעי':'במדבר','מטות-מסעי':'במדבר','מטו"מ':'במדבר',
+  'מצורע':'ויקרא','אחרי':'ויקרא','אחרי מות':'ויקרא','קדושים':'ויקרא',
+  'אחרי קדושים':'ויקרא','אמור':'ויקרא','בהר':'ויקרא','בחוקותי':'ויקרא',
+  'בהר בחוקותי':'ויקרא',
+  'במדבר':'במדבר','נשא':'במדבר','בהעלותך':'במדבר','שלח':'במדבר',
+  'שלח לך':'במדבר','קרח':'במדבר','חוקת':'במדבר','חקת':'במדבר',
+  'בלק':'במדבר','פנחס':'במדבר','מטות':'במדבר','מסעי':'במדבר',
+  'מטות מסעי':'במדבר','מטו"מ':'במדבר',
   'דברים':'דברים','ואתחנן':'דברים','עקב':'דברים','ראה':'דברים',
   'שופטים':'דברים','תצא':'דברים','כי תצא':'דברים',
   'תבא':'דברים','כי תבא':'דברים','נצבים':'דברים',
-  'וילך':'דברים','נצבים וילך':'דברים','נצבים-וילך':'דברים',
-  'האזינו':'דברים','וזאת הברכה':'דברים',
+  'וילך':'דברים','נצבים וילך':'דברים','האזינו':'דברים',
 };
 
 const SEFER_ORDER = ['בראשית','שמות','ויקרא','במדבר','דברים'];
@@ -204,7 +191,7 @@ function calcProgress(volume: Volume, learned: LearnedMap): number {
   return total === 0 ? 0 : done / total;
 }
 
-// ── Spine line ────────────────────────────────────────────────────────────────
+// ── SpineLine ─────────────────────────────────────────────────────────────────
 
 function SpineLine() {
   return <div style={{ width: '68%', height: 1, background: SPINE_LINE, flexShrink: 0 }} />;
@@ -234,37 +221,33 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
         className="relative overflow-hidden w-full transition-transform duration-200 group-hover:scale-[1.04] group-hover:-translate-y-1.5"
         style={{ height: BOOK_HEIGHT, background: EMPTY_BG, borderRadius: '2px 2px 0 0', border: '1px solid rgba(11,31,58,0.13)', boxShadow: '2px 0 6px rgba(0,0,0,0.1), -1px 0 3px rgba(0,0,0,0.05)' }}
       >
-        <div className="absolute bottom-0 left-0 right-0 transition-all duration-700" style={{ height: `${fillPct}%`, background: FILL_BG }} />
+        {/* Fill rising from bottom */}
+        <div className="absolute bottom-0 left-0 right-0 transition-all duration-700"
+          style={{ height: `${fillPct}%`, background: FILL_BG }} />
 
+        {/* Text content — dark navy on light bg, merges with fill when covered */}
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-between" style={{ padding: '8px 3px' }}>
           <SpineLine />
-
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span dir="rtl" style={{ fontSize: 7, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.45, letterSpacing: '0.07em', padding: '0 2px', ...SPINE_TEXT_STYLE }}>
+            <span dir="rtl" style={{ fontSize: 7, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.45, letterSpacing: '0.07em', padding: '0 2px', color: SPINE_TEXT }}>
               לקוטי שיחות
             </span>
           </div>
-
           <SpineLine />
-
           <div className="flex flex-[1.5] items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span dir="rtl" style={{ fontSize: 12, fontWeight: '700', fontFamily: 'serif', textAlign: 'center', lineHeight: 1.2, ...SPINE_TEXT_STYLE }}>
+            <span dir="rtl" style={{ fontSize: 12, fontWeight: '700', fontFamily: 'serif', textAlign: 'center', lineHeight: 1.2, color: SPINE_TEXT }}>
               {`חלק ${hebNum}`}
             </span>
           </div>
-
           <SpineLine />
-
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span dir="rtl" style={{ fontSize: 7.5, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.5, whiteSpace: 'pre-line', padding: '0 2px', ...SPINE_TEXT_STYLE }}>
+            <span dir="rtl" style={{ fontSize: 7.5, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.5, whiteSpace: 'pre-line', padding: '0 2px', color: SPINE_TEXT }}>
               {sefarim.join('\n')}
             </span>
           </div>
-
           <SpineLine />
         </div>
       </div>
-
       <div style={{ width: '100%', height: 5, background: '#06121e', opacity: 0.85, borderRadius: '0 0 1px 1px' }} />
     </button>
   );
@@ -272,58 +255,65 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
 
 // ── SichaRow ──────────────────────────────────────────────────────────────────
 
-function SichaRow({ sicha, idx, isLearned, onToggle, volId, volLabel }: {
-  sicha: Sicha; idx: number; isLearned: boolean;
-  onToggle: (id: string) => void; volId: number; volLabel?: string;
+function SichaRow({ sicha, isLearned, isFav, isBook, onToggle, onToggleFavorite, onToggleBookmark, volId, volLabel }: {
+  sicha: Sicha; isLearned: boolean; isFav: boolean; isBook: boolean;
+  onToggle: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  onToggleBookmark: (id: string) => void;
+  volId: number; volLabel?: string;
 }) {
-  const dach = getDachUrl(sicha, volId);
-
-  // Use programmatic <a> click — more reliable than window.open for new tab
-  // and won't navigate the current tab (avoids drawer close on return)
-  function openDach(e: React.MouseEvent) {
-    e.stopPropagation();
-    const a = document.createElement('a');
-    a.href = dach;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
   return (
     <div
       dir="rtl"
-      className={`flex items-center gap-2 px-4 py-3 border-b border-[#f0ebe3] transition-colors ${isLearned ? 'bg-[#0B1F3A]/5' : 'hover:bg-[#f7f3ed]'}`}
+      className={`flex items-center gap-1.5 px-4 py-3 border-b border-[#f0ebe3] transition-colors ${isLearned ? 'bg-[#0B1F3A]/5' : 'hover:bg-[#f7f3ed]'}`}
     >
-      <button onClick={() => onToggle(sicha.id)} className="flex items-center gap-2.5 flex-1 min-w-0" dir="rtl">
-        <div className="flex-shrink-0">
-          {isLearned ? <CheckSquare size={20} className="text-[#0B1F3A]" /> : <Square size={20} className="text-[#ddd4c0]" />}
-        </div>
-        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border"
-          style={{ background: isLearned ? '#0B1F3A' : 'transparent', borderColor: isLearned ? '#0B1F3A' : '#ddd4c0', color: isLearned ? '#fff' : '#4a3f30' }}>
-          {idx + 1}
-        </div>
-        <div className="flex-1 min-w-0" dir="rtl">
-          <div className={`text-sm font-semibold font-serif truncate ${isLearned ? 'text-[#0B1F3A]' : 'text-[#1c1610]'}`}>
-            {sicha.title}
-          </div>
-          {(sicha.pageRef || volLabel) && (
-            <div className="flex items-center gap-1.5 mt-0.5">
-              {sicha.pageRef && <span className="text-xs text-[#4a3f30]/60">{sicha.pageRef}</span>}
-              {volLabel && <span className="text-[10px] bg-[#f0ebe3] text-[#4a3f30] px-1.5 py-0.5 rounded font-serif">{volLabel}</span>}
-            </div>
-          )}
-        </div>
+      {/* Learned checkbox */}
+      <button onClick={() => onToggle(sicha.id)} className="flex-shrink-0">
+        {isLearned
+          ? <CheckSquare size={19} className="text-[#0B1F3A]" />
+          : <Square      size={19} className="text-[#ddd4c0]" />}
       </button>
 
+      {/* Title + pageRef */}
+      <button onClick={() => onToggle(sicha.id)} className="flex-1 min-w-0 text-right" dir="rtl">
+        <div className={`text-sm font-semibold font-serif truncate ${isLearned ? 'text-[#0B1F3A]' : 'text-[#1c1610]'}`}>
+          {sicha.title}
+        </div>
+        {(sicha.pageRef || volLabel) && (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {sicha.pageRef && <span className="text-xs text-[#4a3f30]/60">{sicha.pageRef}</span>}
+            {volLabel && <span className="text-[10px] bg-[#f0ebe3] text-[#4a3f30] px-1.5 py-0.5 rounded font-serif">{volLabel}</span>}
+          </div>
+        )}
+      </button>
+
+      {/* pp */}
       <div className="flex-shrink-0" dir="ltr">
         <span className="text-xs font-medium text-[#4a3f30]">{sicha.pageCount}</span>
         <span className="text-[10px] text-[#4a3f30]/60 ml-0.5">pp</span>
       </div>
 
+      {/* Star */}
       <button
-        onClick={openDach}
+        onClick={(e) => { e.stopPropagation(); onToggleFavorite(sicha.id); }}
+        title={isFav ? 'Remove favorite' : 'Add to favorites'}
+        className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-[#fff8e1]"
+      >
+        <Star size={13} className={isFav ? 'text-amber-400' : 'text-[#ddd4c0]'} fill={isFav ? '#fbbf24' : 'none'} />
+      </button>
+
+      {/* Bookmark */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleBookmark(sicha.id); }}
+        title={isBook ? 'Remove bookmark' : 'Add bookmark'}
+        className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors hover:bg-[#e8f4ff]"
+      >
+        <Bookmark size={13} className={isBook ? 'text-blue-400' : 'text-[#ddd4c0]'} fill={isBook ? '#60a5fa' : 'none'} />
+      </button>
+
+      {/* dach.dev */}
+      <button
+        onClick={(e) => { e.stopPropagation(); openDach(sicha, volId); }}
         title="Read on dach.dev"
         className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-[#4a3f30]/40 hover:text-[#0B1F3A] hover:bg-[#eee8de] transition-colors"
       >
@@ -335,8 +325,10 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volId, volLabel }: {
 
 // ── SichaDrawer ───────────────────────────────────────────────────────────────
 
-function SichaDrawer({ volume, learned, onToggle, onClose }: {
-  volume: Volume; learned: LearnedMap; onToggle: (id: string) => void; onClose: () => void;
+function SichaDrawer({ volume, learned, favorites, bookmarks, onToggle, onToggleFavorite, onToggleBookmark, onClose }: {
+  volume: Volume; learned: LearnedMap; favorites: StarsMap; bookmarks: StarsMap;
+  onToggle: (id: string) => void; onToggleFavorite: (id: string) => void;
+  onToggleBookmark: (id: string) => void; onClose: () => void;
 }) {
   const total      = volume.sichos.reduce((s, x) => s + x.pageCount, 0);
   const learnedPgs = volume.sichos.filter(x => learned[x.id]).reduce((s, x) => s + x.pageCount, 0);
@@ -365,8 +357,12 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
-          {volume.sichos.map((s, i) => (
-            <SichaRow key={s.id} sicha={s} idx={i} isLearned={!!learned[s.id]} onToggle={onToggle} volId={volume.id} />
+          {volume.sichos.map((s) => (
+            <SichaRow
+              key={s.id} sicha={s} volId={volume.id}
+              isLearned={!!learned[s.id]} isFav={!!favorites[s.id]} isBook={!!bookmarks[s.id]}
+              onToggle={onToggle} onToggleFavorite={onToggleFavorite} onToggleBookmark={onToggleBookmark}
+            />
           ))}
         </div>
         <div className="px-6 py-4 border-t border-[#ddd4c0] bg-[#f7f3ed]">
@@ -380,19 +376,17 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── sessionStorage key for open volume ───────────────────────────────────────
 
 const SESSION_KEY = 'sichosTracker_openVolumeId';
 
-export default function Bookshelf({ volumes, learned, onToggle }: Props) {
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+export default function Bookshelf({ volumes, learned, favorites, bookmarks, onToggle, onToggleFavorite, onToggleBookmark }: Props) {
   const [search, setSearch] = useState('');
 
-  // Persist open volume in sessionStorage so drawer survives tab switching
   const [openVolumeId, setOpenVolumeId] = useState<number | null>(() => {
-    try {
-      const saved = sessionStorage.getItem(SESSION_KEY);
-      return saved ? Number(saved) : null;
-    } catch { return null; }
+    try { const s = sessionStorage.getItem(SESSION_KEY); return s ? Number(s) : null; } catch { return null; }
   });
 
   const openVolume = useMemo(
@@ -400,7 +394,7 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
     [openVolumeId, volumes]
   );
 
-  function openVol(vol: Volume | null) {
+  function handleOpen(vol: Volume | null) {
     const id = vol?.id ?? null;
     setOpenVolumeId(id);
     try {
@@ -409,19 +403,14 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
     } catch {}
   }
 
-  // Clear saved state if user explicitly closes drawer
-  function closeDrawer() {
-    openVol(null);
-  }
-
   const searchResults = useMemo(() => {
     const q = search.trim();
     if (!q) return null;
-    const hits: { sicha: Sicha; vol: Volume; idx: number }[] = [];
+    const hits: { sicha: Sicha; vol: Volume }[] = [];
     for (const vol of volumes) {
-      vol.sichos.forEach((s, i) => {
-        if (matchesSicha(s, q)) hits.push({ sicha: s, vol, idx: i });
-      });
+      for (const s of vol.sichos) {
+        if (matchesSicha(s, q)) hits.push({ sicha: s, vol });
+      }
     }
     return hits;
   }, [search, volumes]);
@@ -438,13 +427,10 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
         <p className="text-sm text-[#4a3f30] mt-0.5">Track your Likkutei Sichos learning</p>
       </div>
 
-      {/* Search — Hebrew and English */}
       <div className="relative mb-4">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a3f30]/40 pointer-events-none" />
         <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+          type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search: בראשית, Bereishis, Noach, Chanukah…"
           className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-[#ddd4c0] bg-white text-[#1c1610] placeholder:text-[#4a3f30]/40 focus:outline-none focus:ring-2 focus:ring-[#0B1F3A]/20 focus:border-[#0B1F3A] transition-all"
         />
@@ -459,16 +445,17 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
         <div className="bg-white rounded-2xl border border-[#ddd4c0] shadow-sm overflow-hidden mb-4">
           <div className="bg-[#f7f3ed] px-6 py-3 border-b border-[#ddd4c0]">
             <span className="text-xs text-[#4a3f30] font-medium">
-              {searchResults.length === 0 ? 'No results found' : `${searchResults.length} sicha${searchResults.length !== 1 ? 's' : ''} found`}
+              {searchResults.length === 0 ? 'No results' : `${searchResults.length} sicha${searchResults.length !== 1 ? 's' : ''} found`}
             </span>
           </div>
           {searchResults.length > 0 && (
             <div className="max-h-96 overflow-y-auto">
-              {searchResults.map(({ sicha, vol, idx }) => (
+              {searchResults.map(({ sicha, vol }) => (
                 <SichaRow
-                  key={sicha.id} sicha={sicha} idx={idx}
-                  isLearned={!!learned[sicha.id]} onToggle={onToggle}
-                  volId={vol.id} volLabel={`חלק ${HEB_NUMS[vol.id] ?? vol.id}`}
+                  key={sicha.id} sicha={sicha} volId={vol.id}
+                  volLabel={`חלק ${HEB_NUMS[vol.id] ?? vol.id}`}
+                  isLearned={!!learned[sicha.id]} isFav={!!favorites[sicha.id]} isBook={!!bookmarks[sicha.id]}
+                  onToggle={onToggle} onToggleFavorite={onToggleFavorite} onToggleBookmark={onToggleBookmark}
                 />
               ))}
             </div>
@@ -479,23 +466,13 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
       <div className="bg-white rounded-2xl border border-[#ddd4c0] shadow-sm overflow-hidden">
         <div className="bg-[#f7f3ed] px-6 py-3 border-b border-[#ddd4c0] flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#0B1F3A]/30" />
-          <span className="text-xs text-[#4a3f30] font-medium tracking-wide uppercase">
-            לקוטי שיחות — {volumes.length} חלקים
-          </span>
+          <span className="text-xs text-[#4a3f30] font-medium tracking-wide uppercase">לקוטי שיחות — {volumes.length} חלקים</span>
         </div>
         <div className="px-6 pt-10 pb-3">
-          <div
-            dir="rtl"
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(13, minmax(0, 1fr))', gap: '6px', alignItems: 'end' }}
-          >
+          <div dir="rtl" style={{ display: 'grid', gridTemplateColumns: 'repeat(13, minmax(0, 1fr))', gap: '6px', alignItems: 'end' }}>
             {volumes.map(vol => (
-              <BookSpine
-                key={vol.id}
-                volume={vol}
-                progress={calcProgress(vol, learned)}
-                onClick={() => openVol(vol)}
-                dimmed={matchingVolIds !== null && !matchingVolIds.has(vol.id)}
-              />
+              <BookSpine key={vol.id} volume={vol} progress={calcProgress(vol, learned)}
+                onClick={() => handleOpen(vol)} dimmed={matchingVolIds !== null && !matchingVolIds.has(vol.id)} />
             ))}
           </div>
           <div style={{ height: 14, background: 'linear-gradient(180deg, #c8b89a 0%, #a08860 100%)', borderRadius: '0 0 4px 4px', boxShadow: '0 5px 12px rgba(0,0,0,0.22)' }} />
@@ -505,10 +482,9 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
 
       {openVolume && (
         <SichaDrawer
-          volume={openVolume}
-          learned={learned}
-          onToggle={onToggle}
-          onClose={closeDrawer}
+          volume={openVolume} learned={learned} favorites={favorites} bookmarks={bookmarks}
+          onToggle={onToggle} onToggleFavorite={onToggleFavorite} onToggleBookmark={onToggleBookmark}
+          onClose={() => handleOpen(null)}
         />
       )}
     </section>
