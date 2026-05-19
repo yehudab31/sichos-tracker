@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, CheckSquare, Square, ExternalLink, Search } from 'lucide-react';
+import { X, CheckSquare, Square, ExternalLink, Search, BookOpen } from 'lucide-react';
 import type { Volume, Sicha } from '../data/sampleData';
 import type { LearnedMap } from '../hooks/useLearnedState';
 
@@ -14,7 +14,6 @@ interface Props {
 const BOOK_HEIGHT   = 210;
 const EMPTY_BG      = 'rgba(11, 31, 58, 0.06)';
 const FILL_BG       = '#0B1F3A';
-// White text + dark shadow = readable on BOTH the light empty area and the dark fill
 const SPINE_TEXT_STYLE = {
   color: 'rgba(255, 255, 255, 0.95)',
   textShadow: '0 1px 3px rgba(0,0,0,0.55), 0 0 6px rgba(11,31,58,0.8)',
@@ -30,32 +29,33 @@ const HEB_NUMS: Record<number, string> = {
   31:'לא', 32:'לב', 33:'לג', 34:'לד', 35:'לה', 36:'לו', 37:'לז', 38:'לח', 39:'לט',
 };
 
-// ── Sefer helpers — expanded mapping with common scraper variants ─────────────
+// ── dach.dev link — computed directly from sicha id ──────────────────────────
+// sicha.id format: "1-1", "2-3" → https://dach.dev/book/likkutei-sichos/viewer/1_1
+
+function dachUrl(sichaId: string): string {
+  return `https://dach.dev/book/likkutei-sichos/viewer/${sichaId.replace('-', '_')}`;
+}
+
+// ── Sefer helpers ─────────────────────────────────────────────────────────────
 
 const PARSHA_TO_SEFER: Record<string, string> = {
-  // בראשית
   'בראשית':'בראשית','נח':'בראשית','לך לך':'בראשית','לך-לך':'בראשית',
   'וירא':'בראשית','חיי שרה':'בראשית','חיי-שרה':'בראשית',
   'תולדות':'בראשית','ויצא':'בראשית','וישלח':'בראשית',
   'וישב':'בראשית','מקץ':'בראשית','ויגש':'בראשית','ויחי':'בראשית',
-  // שמות
   'שמות':'שמות','וארא':'שמות','וא"ר':'שמות','בא':'שמות','בשלח':'שמות',
   'יתרו':'שמות','משפטים':'שמות','תרומה':'שמות','תצוה':'שמות','כי תשא':'שמות',
   'תשא':'שמות','ויקהל':'שמות','פקודי':'שמות','ויקהל פקודי':'שמות','ויקהל-פקודי':'שמות',
-  // ויקרא
   'ויקרא':'ויקרא','צו':'ויקרא','שמיני':'ויקרא','תזריע':'ויקרא',
   'מצורע':'ויקרא','תזריע מצורע':'ויקרא','תזריע-מצורע':'ויקרא',
   'אחרי':'ויקרא','אחרי מות':'ויקרא','קדושים':'ויקרא',
   'אחרי קדושים':'ויקרא','אחרי-קדושים':'ויקרא',
   'אמור':'ויקרא','בהר':'ויקרא','בחוקותי':'ויקרא',
   'בהר בחוקותי':'ויקרא','בהר-בחוקותי':'ויקרא',
-  // במדבר
   'במדבר':'במדבר','נשא':'במדבר','בהעלותך':'במדבר','שלח':'במדבר','שלח לך':'במדבר',
   'קרח':'במדבר','חוקת':'במדבר','חקת':'במדבר','בלק':'במדבר','פנחס':'במדבר',
-  'מטות':'במדבר','מסעי':'במדבר','מטות מסעי':'במדבר','מטות-מסעי':'במדבר',
-  'מטו"מ':'במדבר',
-  // דברים
-  'דברים':'דברים','ואתחנן':'דברים','עקב':'דברים','ראה':'דברים','כי תראה':'דברים',
+  'מטות':'במדבר','מסעי':'במדבר','מטות מסעי':'במדבר','מטות-מסעי':'במדבר','מטו"מ':'במדבר',
+  'דברים':'דברים','ואתחנן':'דברים','עקב':'דברים','ראה':'דברים',
   'שופטים':'דברים','תצא':'דברים','כי תצא':'דברים',
   'תבא':'דברים','כי תבא':'דברים','נצבים':'דברים',
   'וילך':'דברים','נצבים וילך':'דברים','נצבים-וילך':'דברים',
@@ -67,16 +67,11 @@ const ORDINALS    = new Set(['א','ב','ג','ד','ה','ו','ז','ח','ט','י'])
 
 function cleanTitle(raw: string): string {
   let t = raw.trim();
-  // Strip "פ' " / "פר' " / "פרשת " prefix
   if (/^(פ'|פר'|פרשת)\s/.test(t)) t = t.replace(/^(פ'|פר'|פרשת)\s+/, '').trim();
-  // Strip " - note" suffix
   const dash = t.indexOf(' - ');
   if (dash !== -1) t = t.slice(0, dash).trim();
-  // Strip trailing ordinal letter
   const parts = t.split(' ');
-  if (parts.length > 1 && ORDINALS.has(parts[parts.length - 1])) {
-    t = parts.slice(0, -1).join(' ');
-  }
+  if (parts.length > 1 && ORDINALS.has(parts[parts.length - 1])) t = parts.slice(0, -1).join(' ');
   return t;
 }
 
@@ -88,8 +83,6 @@ function getSefarimForVolume(volume: Volume): string[] {
   }
   return SEFER_ORDER.filter(s => found.has(s));
 }
-
-// ── Progress ──────────────────────────────────────────────────────────────────
 
 function calcProgress(volume: Volume, learned: LearnedMap): number {
   const total = volume.sichos.reduce((s, x) => s + x.pageCount, 0);
@@ -119,99 +112,36 @@ function BookSpine({ volume, progress, onClick, dimmed }: {
       className={`group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B1F3A]/40 transition-opacity duration-200 ${dimmed ? 'opacity-20' : 'opacity-100'}`}
       style={{ width: '100%' }}
     >
-      {/* % badge */}
       <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0B1F3A] text-white text-[10px] font-medium px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none whitespace-nowrap z-20">
         {fillPct}%
       </div>
-
-      {/* Book body */}
       <div
         className="relative overflow-hidden w-full transition-transform duration-200 group-hover:scale-[1.04] group-hover:-translate-y-1.5"
-        style={{
-          height: BOOK_HEIGHT,
-          background: EMPTY_BG,
-          borderRadius: '2px 2px 0 0',
-          border: '1px solid rgba(11,31,58,0.13)',
-          boxShadow: '2px 0 6px rgba(0,0,0,0.1), -1px 0 3px rgba(0,0,0,0.05)',
-        }}
+        style={{ height: BOOK_HEIGHT, background: EMPTY_BG, borderRadius: '2px 2px 0 0', border: '1px solid rgba(11,31,58,0.13)', boxShadow: '2px 0 6px rgba(0,0,0,0.1), -1px 0 3px rgba(0,0,0,0.05)' }}
       >
-        {/* Dark fill rising from bottom */}
-        <div
-          className="absolute bottom-0 left-0 right-0 transition-all duration-700"
-          style={{ height: `${fillPct}%`, background: FILL_BG }}
-        />
-
-        {/* Spine text — above fill, always white with shadow so readable on both backgrounds */}
-        <div
-          className="absolute inset-0 z-10 flex flex-col items-center justify-between"
-          style={{ padding: '8px 3px' }}
-        >
+        <div className="absolute bottom-0 left-0 right-0 transition-all duration-700" style={{ height: `${fillPct}%`, background: FILL_BG }} />
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-between" style={{ padding: '8px 3px' }}>
           <SpineLine />
-
-          {/* לקוטי שיחות */}
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span
-              dir="rtl"
-              style={{
-                fontSize: 7,
-                fontFamily: 'serif',
-                textAlign: 'center',
-                lineHeight: 1.45,
-                letterSpacing: '0.07em',
-                padding: '0 2px',
-                ...SPINE_TEXT_STYLE,
-                opacity: 0.8,
-              }}
-            >
+            <span dir="rtl" style={{ fontSize: 7, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.45, letterSpacing: '0.07em', padding: '0 2px', ...SPINE_TEXT_STYLE, opacity: 0.8 }}>
               לקוטי שיחות
             </span>
           </div>
-
           <SpineLine />
-
-          {/* חלק + number — most prominent */}
           <div className="flex flex-[1.5] items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span
-              dir="rtl"
-              style={{
-                fontSize: 12,
-                fontWeight: '700',
-                fontFamily: 'serif',
-                textAlign: 'center',
-                lineHeight: 1.2,
-                ...SPINE_TEXT_STYLE,
-              }}
-            >
+            <span dir="rtl" style={{ fontSize: 12, fontWeight: '700', fontFamily: 'serif', textAlign: 'center', lineHeight: 1.2, ...SPINE_TEXT_STYLE }}>
               {`חלק ${hebNum}`}
             </span>
           </div>
-
           <SpineLine />
-
-          {/* Sefer name(s) */}
           <div className="flex flex-1 items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
-            <span
-              dir="rtl"
-              style={{
-                fontSize: 7.5,
-                fontFamily: 'serif',
-                textAlign: 'center',
-                lineHeight: 1.5,
-                whiteSpace: 'pre-line',
-                padding: '0 2px',
-                ...SPINE_TEXT_STYLE,
-                opacity: 0.9,
-              }}
-            >
-              {sefarim.length > 0 ? sefarim.join('\n') : ''}
+            <span dir="rtl" style={{ fontSize: 7.5, fontFamily: 'serif', textAlign: 'center', lineHeight: 1.5, whiteSpace: 'pre-line', padding: '0 2px', ...SPINE_TEXT_STYLE, opacity: 0.9 }}>
+              {sefarim.join('\n')}
             </span>
           </div>
-
           <SpineLine />
         </div>
       </div>
-
-      {/* Shelf peg */}
       <div style={{ width: '100%', height: 5, background: '#06121e', opacity: 0.85, borderRadius: '0 0 1px 1px' }} />
     </button>
   );
@@ -223,19 +153,20 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volLabel }: {
   sicha: Sicha; idx: number; isLearned: boolean;
   onToggle: (id: string) => void; volLabel?: string;
 }) {
+  const dach = dachUrl(sicha.id);
+
   return (
     <div
       dir="rtl"
       className={`flex items-center gap-2 px-4 py-3 border-b border-[#f0ebe3] transition-colors ${isLearned ? 'bg-[#0B1F3A]/5' : 'hover:bg-[#f7f3ed]'}`}
     >
+      {/* Toggle button — rightmost */}
       <button onClick={() => onToggle(sicha.id)} className="flex items-center gap-2.5 flex-1 min-w-0" dir="rtl">
         <div className="flex-shrink-0">
           {isLearned ? <CheckSquare size={20} className="text-[#0B1F3A]" /> : <Square size={20} className="text-[#ddd4c0]" />}
         </div>
-        <div
-          className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border"
-          style={{ background: isLearned ? '#0B1F3A' : 'transparent', borderColor: isLearned ? '#0B1F3A' : '#ddd4c0', color: isLearned ? '#fff' : '#4a3f30' }}
-        >
+        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border"
+          style={{ background: isLearned ? '#0B1F3A' : 'transparent', borderColor: isLearned ? '#0B1F3A' : '#ddd4c0', color: isLearned ? '#fff' : '#4a3f30' }}>
           {idx + 1}
         </div>
         <div className="flex-1 min-w-0" dir="rtl">
@@ -251,15 +182,32 @@ function SichaRow({ sicha, idx, isLearned, onToggle, volLabel }: {
         </div>
       </button>
 
+      {/* Page count */}
       <div className="flex-shrink-0" dir="ltr">
         <span className="text-xs font-medium text-[#4a3f30]">{sicha.pageCount}</span>
         <span className="text-[10px] text-[#4a3f30]/60 ml-0.5">pp</span>
       </div>
 
+      {/* dach.dev — read full text + AI guide */}
+      <a
+        href={dach}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={e => e.stopPropagation()}
+        title="Open on dach.dev — full text + AI study guide"
+        className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-[#4a3f30]/40 hover:text-[#0B1F3A] hover:bg-[#eee8de] transition-colors"
+      >
+        <BookOpen size={13} />
+      </a>
+
+      {/* PDF link — only show if available */}
       {sicha.pdfUrl && (
         <a
-          href={sicha.pdfUrl} target="_blank" rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()} title="Open PDF"
+          href={sicha.pdfUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          title="Open PDF"
           className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-[#4a3f30]/40 hover:text-[#0B1F3A] hover:bg-[#eee8de] transition-colors"
         >
           <ExternalLink size={13} />
@@ -306,7 +254,10 @@ function SichaDrawer({ volume, learned, onToggle, onClose }: {
           ))}
         </div>
         <div className="px-6 py-4 border-t border-[#ddd4c0] bg-[#f7f3ed]">
-          <p className="text-xs text-[#4a3f30]/70 text-center">Progress is weighted by page count</p>
+          <p className="text-xs text-[#4a3f30]/70 text-center">
+            <BookOpen size={10} className="inline mr-1" />
+            Click the book icon on any sicha to read it on dach.dev
+          </p>
         </div>
       </div>
     </>
@@ -363,7 +314,7 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
 
       {searchResults !== null && (
         <div className="bg-white rounded-2xl border border-[#ddd4c0] shadow-sm overflow-hidden mb-4">
-          <div className="bg-[#f7f3ed] px-6 py-3 border-b border-[#ddd4c0] flex items-center justify-between">
+          <div className="bg-[#f7f3ed] px-6 py-3 border-b border-[#ddd4c0]">
             <span className="text-xs text-[#4a3f30] font-medium">
               {searchResults.length === 0 ? 'No results found' : `${searchResults.length} sicha${searchResults.length !== 1 ? 's' : ''} found`}
             </span>
@@ -384,10 +335,7 @@ export default function Bookshelf({ volumes, learned, onToggle }: Props) {
           <span className="text-xs text-[#4a3f30] font-medium tracking-wide uppercase">לקוטי שיחות — {volumes.length} חלקים</span>
         </div>
         <div className="px-6 pt-10 pb-3">
-          <div
-            dir="rtl"
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(13, minmax(0, 1fr))', gap: '6px', alignItems: 'end' }}
-          >
+          <div dir="rtl" style={{ display: 'grid', gridTemplateColumns: 'repeat(13, minmax(0, 1fr))', gap: '6px', alignItems: 'end' }}>
             {volumes.map(vol => (
               <BookSpine key={vol.id} volume={vol} progress={calcProgress(vol, learned)} onClick={() => setOpenVolume(vol)} dimmed={matchingVolIds !== null && !matchingVolIds.has(vol.id)} />
             ))}
